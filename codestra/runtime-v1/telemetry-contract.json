@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "1.0",
+  "authority": "Codestra-Telemetry",
+  "status": "SOURCE_PREPARED_NOT_DEPLOYED",
+  "businesses": [
+    "codestra",
+    "moneybee",
+    "beyvra",
+    "breero",
+    "larim-a",
+    "transportation",
+    "booked4seasons",
+    "social",
+    "klyrow",
+    "telnexa",
+    "kyqra",
+    "restaurant",
+    "provisioning"
+  ],
+  "requiredResourceAttributes": [
+    "codestra_business",
+    "application",
+    "service.name",
+    "service.version",
+    "deployment.environment",
+    "server",
+    "region",
+    "deployment"
+  ],
+  "signals": {
+    "metrics": "sanitized Prometheus endpoint and approved remote-write path",
+    "logs": "Loki OTLP endpoint with a stable portfolio business tenant",
+    "traces": "Tempo OTLP endpoint with a stable portfolio business tenant"
+  },
+  "stableTenantRule": {
+    "header": "X-Scope-OrgID",
+    "allowedValues": "platform or one approved Codestra business slug",
+    "customerIdsAllowed": false,
+    "userIdsAllowed": false,
+    "requestIdsAllowed": false
+  },
+  "forbiddenMetricDimensions": [
+    "tenant_id",
+    "customer_id",
+    "user_id",
+    "email",
+    "phone",
+    "request_id",
+    "correlation_id",
+    "trace_id",
+    "session_id",
+    "message_id",
+    "order_id",
+    "payment_id",
+    "trade_id"
+  ],
+  "forbiddenTelemetryAttributes": [
+    "http.request.header.authorization",
+    "http.request.header.cookie",
+    "http.response.header.set-cookie",
+    "rpc.request.metadata.authorization",
+    "db.statement.raw",
+    "db.query.text.raw",
+    "messaging.message.body",
+    "email.body",
+    "sms.body",
+    "call.recording",
+    "enduser.email",
+    "enduser.phone",
+    "user.password",
+    "oauth.access_token",
+    "oauth.refresh_token",
+    "api.key",
+    "private.key",
+    "credit.report.raw",
+    "government.identifier",
+    "payment.card.number",
+    "bank.account.number",
+    "broker.api_secret",
+    "broker.signing_key",
+    "trade.authorization"
+  ],
+  "sampling": {
+    "errors": 100,
+    "latencyOutliers": 100,
+    "authenticationFailures": 100,
+    "authorizationDenials": 100,
+    "reconciliationFailures": 100,
+    "productionDefaultPercent": 5,
+    "stagingDefaultPercent": 20,
+    "developmentDefaultPercent": 100,
+    "beyvraSuccessfulTradePayloadSamplingPercent": 0,
+    "messageBodySamplingPercent": 0
+  },
+  "resilience": {
+    "memoryLimiterRequired": true,
+    "batchProcessorRequired": true,
+    "persistentQueueRequiredForRemoteExport": true,
+    "boundedRetryRequired": true,
+    "backpressureMetricsRequired": true,
+    "deadLetterOrFailureEvidenceRequired": true
+  },
+  "security": {
+    "publicOtlpReceiversAllowed": false,
+    "receiverAuthenticationRequiredAcrossHostBoundaries": true,
+    "openBaoIssuedWorkloadCertificates": true,
+    "collectorCanReadBusinessRuntimeSecrets": false,
+    "collectorCanAuthorizeCommunicationDelivery": false,
+    "collectorCanAuthorizeTrades": false
+  }
+}
