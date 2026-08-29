@@ -1,0 +1,52 @@
+name: codestra-opentelemetry-collector
+
+services:
+  otel-collector:
+    image: ${OTEL_COLLECTOR_IMAGE:?OTEL_COLLECTOR_IMAGE must be an immutable image reference containing @sha256:}
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: ${OTEL_COLLECTOR_MEMORY_LIMIT:-1g}
+    cpus: ${OTEL_COLLECTOR_CPU_LIMIT:-2.0}
+    stop_grace_period: 30s
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    environment:
+      CODESTRA_ENVIRONMENT: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
+      CODESTRA_REGION: ${CODESTRA_REGION:-hetzner-eu}
+      CODESTRA_SERVER: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
+      TEMPO_OTLP_GRPC_ENDPOINT: ${TEMPO_OTLP_GRPC_ENDPOINT:-tempo:4317}
+      TEMPO_OTLP_INSECURE: ${TEMPO_OTLP_INSECURE:-true}
+      LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-http://loki:3100/otlp}
+      LOKI_OTLP_INSECURE: ${LOKI_OTLP_INSECURE:-true}
+      GOMEMLIMIT: ${OTEL_COLLECTOR_GOMEMLIMIT:-768MiB}
+    expose:
+      - "4317"
+      - "4318"
+      - "8888"
+      - "8889"
+      - "13133"
+    volumes:
+      - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      telemetry:
+        aliases:
+          - otel-collector
+      observability:
+        aliases:
+          - otel-collector
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+
+networks:
+  telemetry:
+    external: true
+    name: ${CODESTRA_TELEMETRY_NETWORK:-codestra-telemetry}
+  observability:
+    external: true
+    name: ${CODESTRA_OBSERVABILITY_NETWORK:-codestra-observability}
