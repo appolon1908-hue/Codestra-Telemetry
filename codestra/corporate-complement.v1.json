@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "component": "opentelemetry-collector",
+  "codestraRole": "telemetry normalization and routing layer",
+  "corporatePurpose": "Standardize telemetry intake, redaction, batching, routing and backpressure behavior before data reaches Grafana stack backends.",
+  "businessPortfolio": ["codestra", "moneybee", "beyvra", "breero", "larim-a", "transportation", "booked4seasons", "social", "klyrow", "telnexa", "kyqra", "restaurant", "provisioning"],
+  "standardDimensions": ["codestra_business", "application", "service", "environment", "server", "region", "deployment"],
+  "forbiddenLabels": ["tenant_id", "customer_id", "user_id", "email", "phone", "request_id", "trace_id", "message_id", "financial_transaction_id"],
+  "corporateFeatures": ["otlp_standard_intake", "resource_attribute_normalization", "secret_redaction", "batching", "memory_limiter", "retry_queue", "business_routing", "multi_backend_export"],
+  "dashboardContribution": ["telemetry_pipeline_health", "dropped_signal_panels", "collector_backpressure_panels", "business_signal_coverage"],
+  "beyvraBoundary": "Collector processors must drop or redact broker credentials, order payloads and financial identifiers before export.",
+  "activationStatus": "SOURCE_PREPARED_NOT_DEPLOYED"
+}
