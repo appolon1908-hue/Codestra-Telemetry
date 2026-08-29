@@ -1,0 +1,89 @@
+name: Validate Codestra OpenTelemetry corporate runtime v1
+
+on:
+  pull_request:
+    paths:
+      - "codestra/runtime-v1/**"
+      - ".github/workflows/validate-codestra-corporate-runtime-v1.yml"
+  push:
+    branches:
+      - development
+      - test
+      - staging
+      - production
+      - main
+    paths:
+      - "codestra/runtime-v1/**"
+      - ".github/workflows/validate-codestra-corporate-runtime-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned YAML parser
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.2
+      - name: Validate business, sampling, and privacy contracts
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          import yaml
+
+          root = Path("codestra/runtime-v1")
+          contract = json.loads((root / "telemetry-contract.json").read_text())
+          sampling_text = (root / "tail-sampling-overlay.yaml").read_text()
+          privacy_text = (root / "privacy-overlay.yaml").read_text()
+          sampling = yaml.safe_load(sampling_text)
+          privacy = yaml.safe_load(privacy_text)
+
+          required_businesses = {
+              "codestra", "moneybee", "beyvra", "breero", "larim-a",
+              "transportation", "booked4seasons", "social", "klyrow",
+              "telnexa", "kyqra", "restaurant", "provisioning",
+          }
+          assert set(contract["businesses"]) == required_businesses
+          assert contract["status"] == "SOURCE_PREPARED_NOT_DEPLOYED"
+          assert contract["stableTenantRule"]["customerIdsAllowed"] is False
+          assert contract["security"]["publicOtlpReceiversAllowed"] is False
+          assert contract["security"]["collectorCanAuthorizeTrades"] is False
+          assert contract["security"]["collectorCanAuthorizeCommunicationDelivery"] is False
+          assert contract["sampling"]["errors"] == 100
+          assert contract["sampling"]["reconciliationFailures"] == 100
+          assert contract["sampling"]["productionDefaultPercent"] == 5
+          assert contract["sampling"]["beyvraSuccessfulTradePayloadSamplingPercent"] == 0
+          assert contract["sampling"]["messageBodySamplingPercent"] == 0
+
+          policies = sampling["processors"]["tail_sampling/codestra"]["policies"]
+          policy_names = {policy["name"] for policy in policies}
+          for required in {
+              "all-errors", "latency-outliers",
+              "authentication-and-authorization-failures",
+              "reconciliation-failures", "production-five-percent",
+              "staging-twenty-percent", "development-all",
+          }:
+              assert required in policy_names
+
+          processor = privacy["processors"]["transform/codestra_privacy"]
+          statements = []
+          for group in ("trace_statements", "log_statements", "metric_statements"):
+              for block in processor[group]:
+                  statements.extend(block["statements"])
+          joined = "\n".join(statements)
+          for attribute in contract["forbiddenTelemetryAttributes"]:
+              assert attribute in joined, attribute
+          for dimension in contract["forbiddenMetricDimensions"]:
+              assert f'"{dimension}"' in joined, dimension
+
+          assert "broker.api_secret" in privacy_text
+          assert "broker.signing_key" in privacy_text
+          assert "trade.authorization" in privacy_text
+          assert "email.body" in privacy_text
+          assert "sms.body" in privacy_text
+          assert "credit.report.raw" in privacy_text
+          assert "http.request.body" not in sampling_text
+          assert "messaging.message.body" not in sampling_text
+          print("Codestra OpenTelemetry corporate runtime validation PASS")
