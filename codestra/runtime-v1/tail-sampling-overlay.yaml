@@ -1,0 +1,70 @@
+processors:
+  tail_sampling/codestra:
+    decision_wait: 10s
+    num_traces: 50000
+    expected_new_traces_per_sec: 1000
+    policies:
+      - name: all-errors
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+      - name: latency-outliers
+        type: latency
+        latency:
+          threshold_ms: 1000
+      - name: authentication-and-authorization-failures
+        type: string_attribute
+        string_attribute:
+          key: codestra.security_event
+          values:
+            - authentication_failure
+            - authorization_denial
+          enabled_regex_matching: false
+      - name: reconciliation-failures
+        type: string_attribute
+        string_attribute:
+          key: codestra.reconciliation_state
+          values:
+            - failed
+            - mismatch
+            - manual_review
+          enabled_regex_matching: false
+      - name: production-five-percent
+        type: and
+        and:
+          and_sub_policy:
+            - name: production-environment
+              type: string_attribute
+              string_attribute:
+                key: deployment.environment
+                values:
+                  - production
+                enabled_regex_matching: false
+            - name: five-percent
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 5
+      - name: staging-twenty-percent
+        type: and
+        and:
+          and_sub_policy:
+            - name: staging-environment
+              type: string_attribute
+              string_attribute:
+                key: deployment.environment
+                values:
+                  - staging
+                  - test
+                enabled_regex_matching: false
+            - name: twenty-percent
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 20
+      - name: development-all
+        type: string_attribute
+        string_attribute:
+          key: deployment.environment
+          values:
+            - development
+          enabled_regex_matching: false
