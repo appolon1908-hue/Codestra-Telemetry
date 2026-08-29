@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "upstream_clone_url": "https://github.com/open-telemetry/opentelemetry-collector.git",
+  "upstream_ref": "main",
+  "upstream_commit": "a183c9cc604a9921c75b2eda0bf8fbb0bb9833b5",
+  "import_path": "upstream",
+  "synchronized_at": "2026-08-29T17:23:04.364723+00:00",
+  "deployment_enabled": false
+}
