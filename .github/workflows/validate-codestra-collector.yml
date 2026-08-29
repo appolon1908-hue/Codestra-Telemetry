@@ -29,7 +29,9 @@ jobs:
           asset="otelcol-contrib_${version}_linux_amd64.tar.gz"
           curl --fail --location --silent --show-error --output "/tmp/${asset}" "${base}/${asset}"
           curl --fail --location --silent --show-error --output "/tmp/${asset}.sha256" "${base}/${asset}.sha256"
-          (cd /tmp && sha256sum --check "${asset}.sha256")
+          expected="$(awk 'NR == 1 {print $1}' "/tmp/${asset}.sha256")"
+          [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
+          printf '%s  %s\n' "$expected" "/tmp/${asset}" | sha256sum --check
           tar -xzf "/tmp/${asset}" -C /tmp otelcol-contrib
           /tmp/otelcol-contrib --version
 
