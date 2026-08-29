@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0",
+  "component": "opentelemetry-collector",
+  "role": "telemetry-standardization-and-routing-layer",
+  "canonicalHostname": "otel.codestra.media",
+  "exposure": "internal_private",
+  "status": "SOURCE_PREPARED_NOT_DEPLOYED",
+  "businessScope": ["codestra", "moneybee", "beyvra", "breero", "larim-a", "transportation", "booked4seasons", "social", "klyrow", "telnexa", "kyqra", "restaurant", "provisioning"],
+  "resourceAttributes": ["service.name", "service.version", "deployment.environment", "codestra.business", "codestra.region", "codestra.deployment"],
+  "applicationAttributes": ["codestra.correlation_id", "codestra.command_id", "codestra.operation", "codestra.result"],
+  "receivers": ["otlp_grpc", "otlp_http", "prometheus_where_required"],
+  "processors": ["memory_limiter", "resource_normalization", "attribute_redaction", "batch", "sampling"],
+  "destinations": ["prometheus_metrics", "loki_logs", "tempo_traces"],
+  "features": {
+    "vendorNeutralInstrumentation": true,
+    "centralRedaction": true,
+    "resourceNormalization": true,
+    "environmentRouting": true,
+    "businessAttribution": true,
+    "tailSamplingPolicy": true,
+    "backpressureProtection": true,
+    "healthAndSelfMetrics": true
+  },
+  "security": {
+    "tlsRequiredAcrossUntrustedNetworks": true,
+    "secretHeadersRedacted": true,
+    "rawSensitiveBodiesForbidden": true,
+    "runtimeCredentialsFromOpenBaoOrSecretFiles": true
+  }
+}
