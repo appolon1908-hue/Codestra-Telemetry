@@ -1,6 +1,14 @@
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
+  file_storage:
+    directory: /var/lib/otelcol/storage
+    create_directory: true
+    timeout: 10s
+    compaction:
+      directory: /var/lib/otelcol/storage
+      on_start: true
+      on_rebound: true
 
 receivers:
   otlp:
@@ -8,8 +16,24 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
         max_recv_msg_size_mib: 16
+        tls:
+          cert_file: /run/secrets/otelcol_server_cert
+          key_file: /run/secrets/otelcol_server_key
+          client_ca_file: /run/secrets/otelcol_client_ca
       http:
         endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: /run/secrets/otelcol_server_cert
+          key_file: /run/secrets/otelcol_server_key
+          client_ca_file: /run/secrets/otelcol_client_ca
+  prometheus/internal:
+    config:
+      scrape_configs:
+        - job_name: otel-collector-internal
+          scrape_interval: 30s
+          scrape_timeout: 10s
+          static_configs:
+            - targets: [127.0.0.1:8888]
 
 processors:
   memory_limiter:
@@ -19,39 +43,137 @@ processors:
 
   resource/codestra:
     attributes:
-      - pattern: '(?i)^(tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|email|phone|token|secret|password|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|url\.full|http\.target|http\.url|db\.statement|process\.command_line|service\.instance\.id|host\.id|container\.id)$'
+      - pattern: '(?i)^(codestra\.business|tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|enduser\.id|user\.(email|phone)|email|phone|token|secret|password|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_url|query_string|url\.full|http\.target|http\.url|db\.statement|exception\.message|process\.command_line|service\.instance\.id|host\.id|container\.id|k8s\.pod\.uid|process\.pid)$'
         action: delete
-      - key: codestra.platform
-        value: codestra
+      - key: codestra.business
+        value: ${env:CODESTRA_BUSINESS}
         action: upsert
       - key: deployment.environment.name
         value: ${env:CODESTRA_ENVIRONMENT}
         action: upsert
-      - key: codestra.region
+      - key: cloud.region
         value: ${env:CODESTRA_REGION}
+        action: upsert
+      - key: host.name
+        value: ${env:CODESTRA_SERVER}
+        action: upsert
+      - key: codestra.platform
+        value: codestra
         action: upsert
       - key: codestra.tenant_scope
         value: aggregate
         action: upsert
 
-  attributes/tenant_safe:
+  attributes/redact:
     actions:
-      - pattern: '(?i)^(tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|email|phone|token|secret|password|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_path|path|uri|url|query|query_string|client\.address|network\.peer\.address|db\.statement)$'
+      - pattern: '(?i)^(authorization|proxy_authorization|cookie|set-cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|broker(\.|_).*(credential|signing_key)|exchange(\.|_).*(api_key|secret)|tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|enduser\.id|user\.(email|phone)|email|phone|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_path|path|uri|url|raw_url|query|query_string|client\.address|network\.peer\.address|db\.statement|exception\.message|service\.instance\.id|host\.id|container\.id|k8s\.pod\.uid|process\.pid)$'
         action: delete
-      - key: tenant_scope
-        value: aggregate
-        action: upsert
 
-  transform/canonical_metrics:
+  filter/required_identity:
+    error_mode: propagate
+    trace_conditions:
+      - 'resource.attributes["codestra.application"] == nil'
+      - 'resource.attributes["service.name"] == nil'
+      - 'resource.attributes["service.version"] == nil'
+      - 'resource.attributes["deployment.id"] == nil'
+    metric_conditions:
+      - 'resource.attributes["codestra.application"] == nil'
+      - 'resource.attributes["service.name"] == nil'
+      - 'resource.attributes["service.version"] == nil'
+      - 'resource.attributes["deployment.id"] == nil'
+    log_conditions:
+      - 'resource.attributes["codestra.application"] == nil'
+      - 'resource.attributes["service.name"] == nil'
+      - 'resource.attributes["service.version"] == nil'
+      - 'resource.attributes["deployment.id"] == nil'
+
+  filter/tenant_safe:
+    error_mode: propagate
+    trace_conditions:
+      - 'resource.attributes["codestra.business"] != "${env:CODESTRA_BUSINESS}"'
+    metric_conditions:
+      - 'resource.attributes["codestra.business"] != "${env:CODESTRA_BUSINESS}"'
+    log_conditions:
+      - 'resource.attributes["codestra.business"] != "${env:CODESTRA_BUSINESS}"'
+
+  transform/metrics:
     error_mode: propagate
     metric_statements:
       - context: datapoint
         statements:
-          - set(attributes["application"], resource.attributes["codestra.application"]) where resource.attributes["codestra.application"] != nil
-          - set(attributes["service"], resource.attributes["service.name"]) where resource.attributes["service.name"] != nil
-          - set(attributes["environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil
-          - set(attributes["server"], resource.attributes["host.name"]) where resource.attributes["host.name"] != nil
+          - set(attributes["codestra_business"], resource.attributes["codestra.business"])
+          - set(attributes["application"], resource.attributes["codestra.application"])
+          - set(attributes["service"], resource.attributes["service.name"])
+          - set(attributes["service_version"], resource.attributes["service.version"])
+          - set(attributes["environment"], resource.attributes["deployment.environment.name"])
+          - set(attributes["deployment"], resource.attributes["deployment.id"])
+          - set(attributes["region"], resource.attributes["cloud.region"])
+          - set(attributes["server"], resource.attributes["host.name"])
           - set(attributes["tenant_scope"], "aggregate")
+          - delete_key(attributes, "tenant_id")
+          - delete_key(attributes, "customer_id")
+          - delete_key(attributes, "account_id")
+          - delete_key(attributes, "user_id")
+          - delete_key(attributes, "request_id")
+          - delete_key(attributes, "correlation_id")
+          - delete_key(attributes, "trace_id")
+          - delete_key(attributes, "span_id")
+          - delete_key(attributes, "message_id")
+          - delete_key(attributes, "order_id")
+          - delete_key(attributes, "workflow_id")
+          - delete_key(attributes, "execution_id")
+          - delete_key(attributes, "db.statement")
+          - delete_key(attributes, "exception.message")
+          - delete_key(attributes, "service.instance.id")
+          - delete_key(attributes, "host.id")
+          - delete_key(attributes, "container.id")
+          - delete_key(attributes, "k8s.pod.uid")
+          - delete_key(attributes, "process.pid")
+          - keep_keys(attributes, ["codestra_business", "application", "service", "service_version", "environment", "deployment", "region", "server", "tenant_scope"])
+
+  transform/traces:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
+          - truncate_all(attributes, 4096)
+      - context: spanevent
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
+          - truncate_all(attributes, 4096)
+
+  transform/logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
+          - truncate_all(attributes, 4096)
+
+  tail_sampling:
+    decision_wait: 15s
+    num_traces: 50000
+    expected_new_traces_per_sec: 1000
+    sample_on_first_match: true
+    policies:
+      - name: preserve-errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: preserve-high-latency
+        type: latency
+        latency:
+          threshold_ms: 2000
+      - name: preserve-critical-paths
+        type: string_attribute
+        string_attribute:
+          key: codestra.priority
+          values: [security, reconciliation, capability, financial, delivery]
+      - name: bounded-normal-success
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
 
   batch:
     timeout: 5s
@@ -59,7 +181,7 @@ processors:
     send_batch_max_size: 16384
 
 exporters:
-  prometheus/application_metrics:
+  prometheus:
     endpoint: 0.0.0.0:8889
     send_timestamps: false
     metric_expiration: 5m
@@ -71,10 +193,13 @@ exporters:
 
   otlp/tempo:
     endpoint: ${env:TEMPO_OTLP_GRPC_ENDPOINT}
+    headers:
+      X-Scope-OrgID: ${env:CODESTRA_BUSINESS}
     tls:
-      insecure: ${env:TEMPO_OTLP_INSECURE}
+      insecure: false
     sending_queue:
       enabled: true
+      storage: file_storage
       num_consumers: 4
       queue_size: 2048
     retry_on_failure:
@@ -85,10 +210,13 @@ exporters:
 
   otlphttp/loki:
     endpoint: ${env:LOKI_OTLP_HTTP_ENDPOINT}
+    headers:
+      X-Scope-OrgID: ${env:CODESTRA_BUSINESS}
     tls:
-      insecure: ${env:LOKI_OTLP_INSECURE}
+      insecure: false
     sending_queue:
       enabled: true
+      storage: file_storage
       num_consumers: 4
       queue_size: 2048
     retry_on_failure:
@@ -98,25 +226,26 @@ exporters:
       max_elapsed_time: 5m
 
 service:
-  extensions:
-    - health_check
+  extensions: [health_check, file_storage]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, resource/codestra, attributes/tenant_safe, batch]
+      processors: [memory_limiter, resource/codestra, attributes/redact, filter/required_identity, filter/tenant_safe, transform/traces, tail_sampling, batch]
       exporters: [otlp/tempo]
     metrics:
-      receivers: [otlp]
-      processors: [memory_limiter, resource/codestra, attributes/tenant_safe, transform/canonical_metrics, batch]
-      exporters: [prometheus/application_metrics]
+      receivers: [otlp, prometheus/internal]
+      processors: [memory_limiter, resource/codestra, attributes/redact, filter/required_identity, filter/tenant_safe, transform/metrics, batch]
+      exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, resource/codestra, attributes/tenant_safe, batch]
+      processors: [memory_limiter, resource/codestra, attributes/redact, filter/required_identity, filter/tenant_safe, transform/logs, batch]
       exporters: [otlphttp/loki]
   telemetry:
     resource:
       platform: codestra
+      codestra_business: ${env:CODESTRA_BUSINESS}
       environment: ${env:CODESTRA_ENVIRONMENT}
+      region: ${env:CODESTRA_REGION}
       server: ${env:CODESTRA_SERVER}
       application: observability
       service: opentelemetry-collector
@@ -135,7 +264,9 @@ service:
                 with_resource_constant_labels:
                   included:
                     - platform
+                    - codestra_business
                     - environment
+                    - region
                     - server
                     - application
                     - service
