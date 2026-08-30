@@ -14,7 +14,7 @@ The instance connects to:
 2. the shared private observability backend network;
 3. no public host port and no host network.
 
-OTLP ingress requires mutual TLS. Certificate issuance, rotation and revocation belong to the approved PKI authority. The Collector never stores private-key values in Git.
+OTLP ingress requires mutual TLS. Tempo and Loki exporter connections verify the approved backend CA and canonical backend service name. Certificate issuance, rotation and revocation belong to the approved PKI authority. The Collector never stores private-key values in Git.
 
 ## Pipeline order
 
@@ -52,7 +52,7 @@ Release evidence must include representative fixtures proving removal of authori
 
 ## Storage and recovery
 
-The writable Collector volume contains only file-backed exporter queue state. It is not long-term telemetry storage. Staging must prove:
+The writable Collector volume contains only file-backed exporter queue state. Its external volume name is derived from the approved `CODESTRA_BUSINESS` value, preventing Compose project reuse from carrying queued data into another business boundary. It is not long-term telemetry storage. Staging must prove:
 
 - restart recovery of queued traces and logs;
 - bounded disk growth during backend unavailability;

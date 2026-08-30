@@ -66,7 +66,9 @@ jobs:
           CODESTRA_REGION: ci
           CODESTRA_SERVER: github-actions
           TEMPO_OTLP_GRPC_ENDPOINT: tempo:4317
+          TEMPO_TLS_SERVER_NAME: temp.codestra.media
           LOKI_OTLP_HTTP_ENDPOINT: https://loki:3100/otlp
+          LOKI_TLS_SERVER_NAME: loki.codestra.media
         run: /tmp/otelcol-contrib validate --config codestra/collector.yaml
 
       - name: Render and inspect private runtime authority
@@ -81,10 +83,13 @@ jobs:
           CODESTRA_BUSINESS_TELEMETRY_NETWORK: codestra-telemetry-platform
           CODESTRA_OBSERVABILITY_NETWORK: codestra-observability
           TEMPO_OTLP_GRPC_ENDPOINT: tempo:4317
+          TEMPO_TLS_SERVER_NAME: temp.codestra.media
           LOKI_OTLP_HTTP_ENDPOINT: https://loki:3100/otlp
+          LOKI_TLS_SERVER_NAME: loki.codestra.media
           OTELCOL_SERVER_CERT_SECRET_NAME: otelcol-server-cert-ci
           OTELCOL_SERVER_KEY_SECRET_NAME: otelcol-server-key-ci
           OTELCOL_CLIENT_CA_SECRET_NAME: otelcol-client-ca-ci
+          OTELCOL_BACKEND_CA_SECRET_NAME: otelcol-backend-ca-ci
           OTEL_COLLECTOR_MEMORY_LIMIT: 1g
           OTEL_COLLECTOR_CPU_LIMIT: "2.0"
           OTEL_COLLECTOR_GOMEMLIMIT: 768MiB
@@ -115,10 +120,13 @@ jobs:
               'otelcol_server_cert',
               'otelcol_server_key',
               'otelcol_client_ca',
+              'otelcol_backend_ca',
           }
           assert config['networks']['codestra-business-telemetry']['external'] is True
           assert config['networks']['codestra-observability']['external'] is True
-          assert 'otelcol-storage' in config['volumes']
+          assert config['volumes']['otelcol-storage']['external'] is True
+          assert config['volumes']['otelcol-storage']['name'] == 'codestra-platform-otelcol-storage'
+          assert not any('/etc/otelcol-contrib/config.yaml' in str(item) for item in service.get('volumes', []))
           PY
 
       - name: Confirm source-only safety state

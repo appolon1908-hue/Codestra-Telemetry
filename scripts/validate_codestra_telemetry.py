@@ -231,15 +231,24 @@ def validate_collector() -> None:
         if dotted in resource_by_key and resource_by_key[dotted].get("action") != "delete":
             fail(f"unsafe resource action for {dotted}")
 
-    required_identity = json.dumps(processors["filter/required_identity"], sort_keys=True)
-    for attribute in (
+    required_attributes = (
         "codestra.application",
         "service.name",
         "service.version",
         "deployment.id",
-    ):
-        if attribute not in required_identity:
-            fail(f"required-identity filter omits {attribute}")
+    )
+    required_conditions = {
+        condition
+        for attribute in required_attributes
+        for condition in (
+            f'resource.attributes["{attribute}"] == nil',
+            f'resource.attributes["{attribute}"] == ""',
+        )
+    }
+    identity_filter = processors["filter/required_identity"]
+    for signal in ("trace_conditions", "metric_conditions", "log_conditions"):
+        if set(identity_filter.get(signal, [])) != required_conditions:
+            fail(f"required-identity {signal} must reject missing and empty identity values")
 
     metric_transform = json.dumps(processors["transform/metrics"], sort_keys=True)
     for label in CANONICAL_METRIC_LABELS:
@@ -295,6 +304,13 @@ def validate_collector() -> None:
             fail(f"{name} queue_size must be positive")
         if exporter.get("retry_on_failure", {}).get("enabled") is not True:
             fail(f"{name} must retry bounded backend failures")
+        expected_server_name = "${env:TEMPO_TLS_SERVER_NAME}" if name == "otlp/tempo" else "${env:LOKI_TLS_SERVER_NAME}"
+        if exporter.get("tls") != {
+            "insecure": False,
+            "ca_file": "/run/secrets/otelcol_backend_ca",
+            "server_name": expected_server_name,
+        }:
+            fail(f"{name} must verify the approved backend CA and service identity")
 
     service = config.get("service", {})
     if set(service.get("extensions", [])) != {"health_check", "file_storage"}:
@@ -343,10 +359,19 @@ def validate_runtime() -> None:
         "otelcol_server_cert",
         "otelcol_server_key",
         "otelcol_client_ca",
+        "otelcol_backend_ca",
     }:
-        fail("Collector mTLS secret-file contract is incomplete")
+        fail("Collector TLS secret-file contract is incomplete")
     if "otelcol-storage:/var/lib/otelcol" not in [str(item) for item in service.get("volumes", [])]:
         fail("Collector durable queue volume is missing")
+    if any("/etc/otelcol-contrib/config.yaml" in str(item) for item in service.get("volumes", [])):
+        fail("Collector runtime must use the immutable configuration embedded in the image")
+    storage = compose.get("volumes", {}).get("otelcol-storage", {})
+    if storage.get("external") is not True:
+        fail("Collector durable queue volume must be externally lifecycle-managed")
+    storage_name = str(storage.get("name", ""))
+    if "${CODESTRA_BUSINESS:" not in storage_name or not storage_name.endswith("-otelcol-storage"):
+        fail("Collector durable queue volume must be scoped by the approved business identity")
     if service.get("healthcheck", {}).get("test") != ["CMD", "/otelcol-healthcheck"]:
         fail("Collector must use the native health probe")
 
@@ -407,6 +432,9 @@ def validate_docs_and_source_safety() -> None:
         "OTELCOL_SERVER_CERT_SECRET_NAME=",
         "OTELCOL_SERVER_KEY_SECRET_NAME=",
         "OTELCOL_CLIENT_CA_SECRET_NAME=",
+        "OTELCOL_BACKEND_CA_SECRET_NAME=",
+        "TEMPO_TLS_SERVER_NAME=",
+        "LOKI_TLS_SERVER_NAME=",
     ):
         if required not in env_text:
             fail(f"runtime example omits {required}")

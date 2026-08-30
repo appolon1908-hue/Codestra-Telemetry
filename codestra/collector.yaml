@@ -73,19 +73,31 @@ processors:
     error_mode: propagate
     trace_conditions:
       - 'resource.attributes["codestra.application"] == nil'
+      - 'resource.attributes["codestra.application"] == ""'
       - 'resource.attributes["service.name"] == nil'
+      - 'resource.attributes["service.name"] == ""'
       - 'resource.attributes["service.version"] == nil'
+      - 'resource.attributes["service.version"] == ""'
       - 'resource.attributes["deployment.id"] == nil'
+      - 'resource.attributes["deployment.id"] == ""'
     metric_conditions:
       - 'resource.attributes["codestra.application"] == nil'
+      - 'resource.attributes["codestra.application"] == ""'
       - 'resource.attributes["service.name"] == nil'
+      - 'resource.attributes["service.name"] == ""'
       - 'resource.attributes["service.version"] == nil'
+      - 'resource.attributes["service.version"] == ""'
       - 'resource.attributes["deployment.id"] == nil'
+      - 'resource.attributes["deployment.id"] == ""'
     log_conditions:
       - 'resource.attributes["codestra.application"] == nil'
+      - 'resource.attributes["codestra.application"] == ""'
       - 'resource.attributes["service.name"] == nil'
+      - 'resource.attributes["service.name"] == ""'
       - 'resource.attributes["service.version"] == nil'
+      - 'resource.attributes["service.version"] == ""'
       - 'resource.attributes["deployment.id"] == nil'
+      - 'resource.attributes["deployment.id"] == ""'
 
   filter/tenant_safe:
     error_mode: propagate
@@ -197,6 +209,8 @@ exporters:
       X-Scope-OrgID: ${env:CODESTRA_BUSINESS}
     tls:
       insecure: false
+      ca_file: /run/secrets/otelcol_backend_ca
+      server_name: ${env:TEMPO_TLS_SERVER_NAME}
     sending_queue:
       enabled: true
       storage: file_storage
@@ -214,6 +228,8 @@ exporters:
       X-Scope-OrgID: ${env:CODESTRA_BUSINESS}
     tls:
       insecure: false
+      ca_file: /run/secrets/otelcol_backend_ca
+      server_name: ${env:LOKI_TLS_SERVER_NAME}
     sending_queue:
       enabled: true
       storage: file_storage

@@ -27,12 +27,15 @@ services:
       CODESTRA_REGION: ${CODESTRA_REGION:?CODESTRA_REGION is required}
       CODESTRA_SERVER: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
       TEMPO_OTLP_GRPC_ENDPOINT: ${TEMPO_OTLP_GRPC_ENDPOINT:-tempo:4317}
+      TEMPO_TLS_SERVER_NAME: ${TEMPO_TLS_SERVER_NAME:-temp.codestra.media}
       LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-https://loki:3100/otlp}
+      LOKI_TLS_SERVER_NAME: ${LOKI_TLS_SERVER_NAME:-loki.codestra.media}
       GOMEMLIMIT: ${OTEL_COLLECTOR_GOMEMLIMIT:-768MiB}
     secrets:
       - otelcol_server_cert
       - otelcol_server_key
       - otelcol_client_ca
+      - otelcol_backend_ca
     expose:
       - "4317"
       - "4318"
@@ -40,7 +43,6 @@ services:
       - "8889"
       - "13133"
     volumes:
-      - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - otelcol-storage:/var/lib/otelcol
     networks:
       codestra-business-telemetry:
@@ -92,6 +94,8 @@ networks:
 
 volumes:
   otelcol-storage:
+    external: true
+    name: codestra-${CODESTRA_BUSINESS:?approved Codestra business identity is required}-otelcol-storage
 
 secrets:
   otelcol_server_cert:
@@ -103,3 +107,6 @@ secrets:
   otelcol_client_ca:
     external: true
     name: ${OTELCOL_CLIENT_CA_SECRET_NAME:-otelcol-client-ca}
+  otelcol_backend_ca:
+    external: true
+    name: ${OTELCOL_BACKEND_CA_SECRET_NAME:-otelcol-backend-ca}
