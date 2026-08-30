@@ -308,7 +308,7 @@ def validate_collector() -> None:
         if exporter.get("tls") != {
             "insecure": False,
             "ca_file": "/run/secrets/otelcol_backend_ca",
-            "server_name": expected_server_name,
+            "server_name_override": expected_server_name,
         }:
             fail(f"{name} must verify the approved backend CA and service identity")
 

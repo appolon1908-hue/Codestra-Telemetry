@@ -210,7 +210,7 @@ exporters:
     tls:
       insecure: false
       ca_file: /run/secrets/otelcol_backend_ca
-      server_name: ${env:TEMPO_TLS_SERVER_NAME}
+      server_name_override: ${env:TEMPO_TLS_SERVER_NAME}
     sending_queue:
       enabled: true
       storage: file_storage
@@ -229,7 +229,7 @@ exporters:
     tls:
       insecure: false
       ca_file: /run/secrets/otelcol_backend_ca
-      server_name: ${env:LOKI_TLS_SERVER_NAME}
+      server_name_override: ${env:LOKI_TLS_SERVER_NAME}
     sending_queue:
       enabled: true
       storage: file_storage
