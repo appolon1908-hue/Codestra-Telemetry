@@ -2,8 +2,15 @@ name: codestra-opentelemetry-collector
 
 services:
   otel-collector:
-    image: ${OTEL_COLLECTOR_IMAGE:?OTEL_COLLECTOR_IMAGE must be an immutable image reference containing @sha256:}
+    build:
+      context: ..
+      dockerfile: codestra/deploy/Dockerfile
+      args:
+        GO_BUILDER_IMAGE: ${GO_BUILDER_IMAGE:?set an immutable Go builder image containing @sha256:}
+        OTELCOL_BASE_IMAGE: ${OTELCOL_BASE_IMAGE:?set an immutable official Collector image containing @sha256:}
+    image: ${CODESTRA_OTELCOL_IMAGE:?set an immutable Codestra Collector image containing @sha256:}
     restart: unless-stopped
+    init: true
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -11,20 +18,21 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 512
-    mem_limit: ${OTEL_COLLECTOR_MEMORY_LIMIT:-1g}
-    cpus: ${OTEL_COLLECTOR_CPU_LIMIT:-2.0}
-    stop_grace_period: 30s
+    stop_grace_period: 60s
     command:
       - --config=/etc/otelcol-contrib/config.yaml
     environment:
+      CODESTRA_BUSINESS: ${CODESTRA_BUSINESS:?approved Codestra business identity is required}
       CODESTRA_ENVIRONMENT: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
-      CODESTRA_REGION: ${CODESTRA_REGION:-hetzner-eu}
+      CODESTRA_REGION: ${CODESTRA_REGION:?CODESTRA_REGION is required}
       CODESTRA_SERVER: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
       TEMPO_OTLP_GRPC_ENDPOINT: ${TEMPO_OTLP_GRPC_ENDPOINT:-tempo:4317}
-      TEMPO_OTLP_INSECURE: ${TEMPO_OTLP_INSECURE:-true}
-      LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-http://loki:3100/otlp}
-      LOKI_OTLP_INSECURE: ${LOKI_OTLP_INSECURE:-true}
+      LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-https://loki:3100/otlp}
       GOMEMLIMIT: ${OTEL_COLLECTOR_GOMEMLIMIT:-768MiB}
+    secrets:
+      - otelcol_server_cert
+      - otelcol_server_key
+      - otelcol_client_ca
     expose:
       - "4317"
       - "4318"
@@ -33,20 +41,65 @@ services:
       - "13133"
     volumes:
       - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - otelcol-storage:/var/lib/otelcol
     networks:
-      telemetry:
+      codestra-business-telemetry:
         aliases:
           - otel-collector
-      observability:
+      codestra-observability:
         aliases:
           - otel-collector
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
+    healthcheck:
+      test: ["CMD", "/otelcol-healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: 25m
+        max-file: "3"
+    labels:
+      codestra.business: ${CODESTRA_BUSINESS:?approved Codestra business identity is required}
+      codestra.application: observability
+      codestra.service: opentelemetry-collector
+      codestra.environment: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
+      codestra.region: ${CODESTRA_REGION:?CODESTRA_REGION is required}
+      codestra.server: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
+      codestra.telemetry.business-identity: deployment-controlled
+      codestra.telemetry.ingress-mtls: required
+      codestra.telemetry.durable-queues: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: ${OTEL_COLLECTOR_CPU_LIMIT:-2.0}
+          memory: ${OTEL_COLLECTOR_MEMORY_LIMIT:-1g}
+          pids: 512
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
 networks:
-  telemetry:
+  codestra-business-telemetry:
     external: true
-    name: ${CODESTRA_TELEMETRY_NETWORK:-codestra-telemetry}
-  observability:
+    name: ${CODESTRA_BUSINESS_TELEMETRY_NETWORK:?business-isolated telemetry network is required}
+  codestra-observability:
     external: true
     name: ${CODESTRA_OBSERVABILITY_NETWORK:-codestra-observability}
+
+volumes:
+  otelcol-storage:
+
+secrets:
+  otelcol_server_cert:
+    external: true
+    name: ${OTELCOL_SERVER_CERT_SECRET_NAME:-otelcol-server-cert}
+  otelcol_server_key:
+    external: true
+    name: ${OTELCOL_SERVER_KEY_SECRET_NAME:-otelcol-server-key}
+  otelcol_client_ca:
+    external: true
+    name: ${OTELCOL_CLIENT_CA_SECRET_NAME:-otelcol-client-ca}
