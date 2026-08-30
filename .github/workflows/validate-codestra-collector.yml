@@ -107,7 +107,11 @@ jobs:
           assert not service.get('ports')
           assert set(service['expose']) == {'4317', '4318', '8888', '8889', '13133'}
           assert set(service['networks']) == {'codestra-business-telemetry', 'codestra-observability'}
-          assert set(service['secrets']) == {
+          secret_sources = {
+              entry if isinstance(entry, str) else entry.get('source')
+              for entry in service['secrets']
+          }
+          assert secret_sources == {
               'otelcol_server_cert',
               'otelcol_server_key',
               'otelcol_client_ca',
