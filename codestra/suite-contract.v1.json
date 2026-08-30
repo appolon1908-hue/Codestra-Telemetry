@@ -1,0 +1,426 @@
+{
+  "schemaVersion": "1.0",
+  "suite": "codestra-corporate-observability-analytics-security",
+  "businesses": [
+    "codestra",
+    "moneybee",
+    "beyvra",
+    "breero",
+    "larim-a",
+    "transportation",
+    "booked4seasons",
+    "social",
+    "klyrow",
+    "telnexa",
+    "kyqra",
+    "restaurant",
+    "provisioning"
+  ],
+  "canonicalDimensions": [
+    "codestra_business",
+    "application",
+    "service",
+    "environment",
+    "server",
+    "region",
+    "deployment"
+  ],
+  "forbiddenIndexedDimensions": [
+    "tenant_id",
+    "customer_id",
+    "user_id",
+    "email",
+    "phone",
+    "request_id",
+    "trace_id",
+    "message_id",
+    "order_id",
+    "payment_id",
+    "transaction_id",
+    "db_statement",
+    "raw_url",
+    "container_id",
+    "pod_uid"
+  ],
+  "authorities": [
+    {
+      "sequence": 1,
+      "component": "loki",
+      "repository": "appolon1908-hue/Codestra-Loki",
+      "canonicalHostname": "loki.codestra.media",
+      "role": "central-log-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 1,
+      "sourceHead": "8fb5202e65f418c53ab2a97000430678d25c1fb6",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 2,
+      "component": "prometheus",
+      "repository": "appolon1908-hue/Codestra-Prometheus",
+      "canonicalHostname": "prom.codestra.media",
+      "role": "metrics-slo-alert-evaluation-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 1,
+      "sourceHead": "188824eff15f6cfae6761d647d3e8123de4b085c",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 3,
+      "component": "grafana",
+      "repository": "appolon1908-hue/Codestra-Grafana-",
+      "canonicalHostname": "graf.codestra.media",
+      "role": "read-only-operational-presentation-authority",
+      "nativeExposure": "loopback_edge_only",
+      "sourcePr": 1,
+      "sourceHead": "55a29aade410a6d2e6bb31384533ae6c3824121d",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 4,
+      "component": "tempo",
+      "repository": "appolon1908-hue/Codestra-Tempo",
+      "canonicalHostname": "temp.codestra.media",
+      "role": "distributed-trace-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 1,
+      "sourceHead": "2415495621e07fc234b4988a2f5bce3bec228cfc",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 5,
+      "component": "opentelemetry",
+      "repository": "appolon1908-hue/Codestra-Telemetry",
+      "canonicalHostname": "otel.codestra.media",
+      "role": "telemetry-ingress-normalization-redaction-routing-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 2,
+      "sourceHead": "9e44696978080368b9af3743db505fa4f59136a0",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 6,
+      "component": "alloy",
+      "repository": "appolon1908-hue/Codestra-Alloy",
+      "canonicalHostname": "allo.codestra.media",
+      "role": "host-service-log-collection-agent-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 2,
+      "sourceHead": "1aac77d1718a87320e3c9b6f40cb98bf00ff4e6b",
+      "sourceState": "review-open",
+      "exactHeadChecks": "pending",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 7,
+      "component": "node-exporter",
+      "repository": "appolon1908-hue/Codestra-Node-Exporter",
+      "canonicalHostname": "node.codestra.media",
+      "role": "host-metrics-operational-evidence-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 1,
+      "sourceHead": "e361b34c5d6c06a492b7f9fd3fff0737ccae1d1b",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 8,
+      "component": "cadvisor",
+      "repository": "appolon1908-hue/Codestra-cAdvisor",
+      "canonicalHostname": "cadv.codestra.media",
+      "role": "container-resource-metrics-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 3,
+      "sourceHead": "d64352861b55c61aaf08d2afdb7069a690cfbbc8",
+      "sourceState": "review-open",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 9,
+      "component": "redis-exporter",
+      "repository": "appolon1908-hue/Codestra-Redis-Exporter",
+      "canonicalHostname": "rdex.codestra.media",
+      "role": "redis-health-capacity-persistence-metrics-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 4,
+      "sourceHead": "5197d12c4c26e26a8e87e9dd56143657c67e4874",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 10,
+      "component": "blackbox-exporter",
+      "repository": "appolon1908-hue/Codestra-Blackbox-Exporter",
+      "canonicalHostname": "blac.codestra.media",
+      "role": "synthetic-availability-dns-tls-authority",
+      "nativeExposure": "internal_private",
+      "sourcePr": 3,
+      "sourceHead": "2dd18e1e1f0d458e2d5cbdf8c58f85e8b0aa43fc",
+      "sourceState": "review-open",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 11,
+      "component": "superset",
+      "repository": "appolon1908-hue/Superset",
+      "canonicalHostname": "supe.codestra.media",
+      "role": "certified-read-only-business-analytics-authority",
+      "nativeExposure": "loopback_edge_only",
+      "sourcePr": 4,
+      "sourceHead": "01dc5b323d18100dcb3482dd6554d6715a986754",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    },
+    {
+      "sequence": 12,
+      "component": "openbao",
+      "repository": "appolon1908-hue/Codestra-OpenBao",
+      "canonicalHostname": "bao.codestra.media",
+      "role": "secrets-pki-workload-identity-authority",
+      "nativeExposure": "private_strong_auth",
+      "sourcePr": 4,
+      "sourceHead": "68818fc0bbddd2dca6c9b9873884768bdf54669d",
+      "sourceState": "promoted-development",
+      "exactHeadChecks": "success",
+      "reviewEvidence": {
+        "state": "pending",
+        "unresolvedThreads": null
+      },
+      "sourceOnlyStatus": "CONFIG_PREPARED_NOT_DEPLOYED",
+      "activationClaim": false,
+      "businessScope": "canonical-suite-catalogue"
+    }
+  ],
+  "approvedFlows": [
+    {
+      "from": "alloy",
+      "to": "loki",
+      "signal": "logs",
+      "ownership": "Alloy collects and redacts; Loki stores, retains, and serves business-isolated logs.",
+      "mutating": false
+    },
+    {
+      "from": "opentelemetry",
+      "to": "loki",
+      "signal": "logs",
+      "ownership": "OpenTelemetry normalizes and routes application logs; Loki remains the log authority.",
+      "mutating": false
+    },
+    {
+      "from": "opentelemetry",
+      "to": "prometheus",
+      "signal": "metrics",
+      "ownership": "OpenTelemetry exposes sanitized application metrics; Prometheus remains the metric, SLO, and alert authority.",
+      "mutating": false
+    },
+    {
+      "from": "opentelemetry",
+      "to": "tempo",
+      "signal": "traces",
+      "ownership": "OpenTelemetry redacts and samples; Tempo stores and serves business-isolated traces.",
+      "mutating": false
+    },
+    {
+      "from": "node-exporter",
+      "to": "prometheus",
+      "signal": "metrics",
+      "ownership": "Node Exporter emits bounded host and operational-evidence metrics for Prometheus scraping.",
+      "mutating": false
+    },
+    {
+      "from": "cadvisor",
+      "to": "prometheus",
+      "signal": "metrics",
+      "ownership": "cAdvisor emits bounded container resource metrics for Prometheus scraping.",
+      "mutating": false
+    },
+    {
+      "from": "redis-exporter",
+      "to": "prometheus",
+      "signal": "metrics",
+      "ownership": "Redis Exporter emits read-only aggregate Redis health metrics for Prometheus scraping.",
+      "mutating": false
+    },
+    {
+      "from": "blackbox-exporter",
+      "to": "prometheus",
+      "signal": "metrics",
+      "ownership": "Blackbox Exporter emits bounded synthetic evidence for Prometheus evaluation.",
+      "mutating": false
+    },
+    {
+      "from": "prometheus",
+      "to": "grafana",
+      "signal": "metrics",
+      "ownership": "Grafana reads corporate recording rules, SLOs, alerts, and aggregate metrics from Prometheus.",
+      "mutating": false
+    },
+    {
+      "from": "loki",
+      "to": "grafana",
+      "signal": "logs",
+      "ownership": "Grafana reads business-isolated logs from fixed Loki datasources.",
+      "mutating": false
+    },
+    {
+      "from": "tempo",
+      "to": "grafana",
+      "signal": "traces",
+      "ownership": "Grafana reads business-isolated traces from matching fixed Tempo datasources.",
+      "mutating": false
+    },
+    {
+      "from": "certified-readonly-datasets",
+      "to": "superset",
+      "signal": "analytics",
+      "ownership": "Superset reads certified datasets through read-only credentials and enforced row-level security.",
+      "mutating": false
+    },
+    {
+      "from": "openbao",
+      "to": "suite-workloads",
+      "signal": "identity-certificates-secrets",
+      "ownership": "OpenBao provides short-lived, policy-scoped identity, certificates, and runtime secrets without owning workload behavior.",
+      "mutating": false
+    }
+  ],
+  "businessIsolation": {
+    "tenantKey": "codestra_business",
+    "deploymentControlledIdentity": true,
+    "callerControlledBusinessAllowed": false,
+    "crossBusinessDefaultAllowed": false,
+    "grafanaBusinessAccessEnabled": false,
+    "supersetBusinessAccessEnabled": false,
+    "openBaoCrossBusinessWildcardAllowed": false
+  },
+  "securityInvariants": {
+    "nativePublicPortsAllowed": false,
+    "immutableDigestRequired": true,
+    "secretMaterialInGitAllowed": false,
+    "runtimeCredentialsFromOpenBaoOrSecretFiles": true,
+    "mtlsAndCaVerificationRequiredWhereSpecified": true,
+    "anonymousAccessAllowed": false,
+    "insecureTlsVerificationAllowed": false,
+    "telemetryDataMinimizationRequired": true,
+    "businessMutationAuthorityAllowed": false,
+    "communicationsDeliveryAuthorityAllowed": false,
+    "financialTradingMutationAuthorityAllowed": false
+  },
+  "beyvraBoundary": {
+    "safeAggregateHealthVisible": true,
+    "latencyVisible": true,
+    "marketDataFreshnessVisible": true,
+    "reconciliationStateVisible": true,
+    "dependencyHealthVisible": true,
+    "brokerExchangeCustodySecretsVisible": false,
+    "tradeSigningAllowed": false,
+    "tradeAuthorizationAllowed": false,
+    "protectedPayloadDecryptionAllowed": false,
+    "authoritativeLedgerMutationAllowed": false
+  },
+  "runtimeActivation": {
+    "deploymentEnabled": false,
+    "nativePublicExposureEnabled": false,
+    "productionTelemetryIngestionEnabled": false,
+    "prometheusScrapingActivated": false,
+    "syntheticProbesActivated": false,
+    "grafanaBusinessAccessEnabled": false,
+    "supersetBusinessAccessEnabled": false,
+    "openBaoInitialized": false,
+    "openBaoPoliciesApplied": false,
+    "communicationsDeliveryEnabled": false,
+    "businessWritesEnabled": false,
+    "financialTradingAuthorityEnabled": false
+  },
+  "milestone": {
+    "name": "CODESTRA_CORPORATE_SUITE_SOURCE_READY_FOR_STAGING_REVIEW",
+    "achieved": false,
+    "status": "SOURCE_COMPATIBILITY_REVIEW_PENDING",
+    "prohibitedClaims": [
+      "DEPLOYED",
+      "PRODUCTION_READY",
+      "RUNTIME_ACTIVATED"
+    ]
+  }
+}
