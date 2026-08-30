@@ -1,0 +1,94 @@
+name: Validate Codestra OpenTelemetry Collector
+
+on:
+  pull_request:
+    paths:
+      - "codestra/**"
+      - ".github/workflows/validate-codestra-collector.yml"
+  push:
+    branches: [development, test, staging, production, main]
+    paths:
+      - "codestra/**"
+      - ".github/workflows/validate-codestra-collector.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Download and verify official Collector Contrib validator
+        run: |
+          set -euo pipefail
+          version=0.159.0
+          base="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${version}"
+          asset="otelcol-contrib_${version}_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error --output "/tmp/${asset}" "${base}/${asset}"
+          curl --fail --location --silent --show-error --output "/tmp/${asset}.sha256" "${base}/${asset}.sha256"
+          expected="$(awk 'NR == 1 {print $1}' "/tmp/${asset}.sha256")"
+          [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
+          printf '%s  %s\n' "$expected" "/tmp/${asset}" | sha256sum --check
+          tar -xzf "/tmp/${asset}" -C /tmp otelcol-contrib
+          /tmp/otelcol-contrib --version
+
+      - name: Validate Collector configuration natively
+        env:
+          CODESTRA_ENVIRONMENT: production
+          CODESTRA_REGION: hetzner-eu
+          CODESTRA_SERVER: codestra-core-01
+          TEMPO_OTLP_GRPC_ENDPOINT: tempo:4317
+          TEMPO_OTLP_INSECURE: "true"
+          LOKI_OTLP_HTTP_ENDPOINT: http://loki:3100/otlp
+          LOKI_OTLP_INSECURE: "true"
+        run: /tmp/otelcol-contrib validate --config codestra/collector.yaml
+
+      - name: Render and inspect private runtime authority
+        env:
+          OTEL_COLLECTOR_IMAGE: example.invalid/otelcol-contrib@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          CODESTRA_ENVIRONMENT: production
+          CODESTRA_REGION: hetzner-eu
+          CODESTRA_SERVER: codestra-core-01
+          CODESTRA_TELEMETRY_NETWORK: codestra-telemetry
+          CODESTRA_OBSERVABILITY_NETWORK: codestra-observability
+          TEMPO_OTLP_GRPC_ENDPOINT: tempo:4317
+          TEMPO_OTLP_INSECURE: "true"
+          LOKI_OTLP_HTTP_ENDPOINT: http://loki:3100/otlp
+          LOKI_OTLP_INSECURE: "true"
+          OTEL_COLLECTOR_MEMORY_LIMIT: 1g
+          OTEL_COLLECTOR_CPU_LIMIT: "2.0"
+          OTEL_COLLECTOR_GOMEMLIMIT: 768MiB
+        run: |
+          docker compose -f codestra/compose.yaml config --format json > /tmp/compose.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path('/tmp/compose.json').read_text())
+          service = config['services']['otel-collector']
+          assert '@sha256:' in service['image']
+          assert service['user'] == '10001:10001'
+          assert service['read_only'] is True
+          assert service['cap_drop'] == ['ALL']
+          assert not service.get('ports')
+          assert set(service['expose']) == {'4317', '4318', '8888', '8889', '13133'}
+          assert set(service['networks']) == {'telemetry', 'observability'}
+          assert config['networks']['telemetry']['external'] is True
+          assert config['networks']['observability']['external'] is True
+          PY
+
+      - name: Enforce tenant-safe and Prometheus ownership contracts
+        run: |
+          set -euo pipefail
+          grep -F 'port: 8888' codestra/collector.yaml
+          grep -F 'endpoint: 0.0.0.0:8889' codestra/collector.yaml
+          grep -F 'resource_to_telemetry_conversion:' codestra/collector.yaml
+          grep -F 'enabled: false' codestra/collector.yaml
+          grep -F 'tenant_scope' codestra/collector.yaml
+          grep -F 'action: delete' codestra/collector.yaml
+          ! grep -RInE 'image:.*(:latest|:[[:space:]]*$)' codestra
+          ! grep -RInE '(^|[[:space:]])ports:' codestra/compose.yaml
+          ! grep -RInE '(token|password|secret)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9/+_.-]{16,}' codestra
