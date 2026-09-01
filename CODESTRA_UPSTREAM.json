@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0",
-  "component": "opentelemetry-collector",
+  "component": "OpenTelemetry Collector",
   "codestra_repository": "appolon1908-hue/Codestra-Telemetry",
   "upstream_repository": "open-telemetry/opentelemetry-collector",
   "upstream_clone_url": "https://github.com/open-telemetry/opentelemetry-collector.git",
-  "upstream_ref": "main",
+  "upstream_ref": "a183c9cc604a9921c75b2eda0bf8fbb0bb9833b5",
   "import_path": "upstream",
   "import_mode": "shallow-source-snapshot",
   "preserve_upstream_license": true,
-  "branches": ["main", "staging", "production"],
-  "deployment_enabled": false
+  "deployment_enabled": false,
+  "secret_material_allowed_in_git": false
 }
