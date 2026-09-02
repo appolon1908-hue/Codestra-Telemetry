@@ -31,6 +31,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 scripts/validate_repository_authority.py
           mapfile -t values < <(python3 - <<'PY'
           import json
           from pathlib import Path
@@ -43,8 +44,9 @@ jobs:
           UPSTREAM_URL="${values[0]}"
           UPSTREAM_REF="${values[1]}"
           IMPORT_PATH="${values[2]}"
-          [[ "$UPSTREAM_URL" == https://github.com/*.git ]] || exit 2
-          [[ "$IMPORT_PATH" == upstream ]] || exit 2
+          test "$UPSTREAM_URL" = "https://github.com/open-telemetry/opentelemetry-collector.git"
+          test "$UPSTREAM_REF" = "main"
+          test "$IMPORT_PATH" = "upstream"
           upstream_sha="$(git ls-remote "$UPSTREAM_URL" "refs/heads/$UPSTREAM_REF" | awk 'NR == 1 {print $1}')"
           locked_sha="$(python3 -c 'import json; print(json.load(open("CODESTRA_UPSTREAM_LOCK.json"))["upstream_commit"])')"
           locked_tree="$(python3 -c 'import json; print(json.load(open("CODESTRA_UPSTREAM_LOCK.json"))["imported_tree_sha"])')"
@@ -52,6 +54,8 @@ jobs:
           [[ "$locked_sha" =~ ^[0-9a-f]{40}$ ]]
           [[ "$locked_tree" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD:upstream)" = "$locked_tree"
+          git fetch --no-tags --depth=1 --filter=blob:none "$UPSTREAM_URL" "$locked_sha"
+          test "$(git rev-parse FETCH_HEAD^{tree})" = "$locked_tree"
           if [[ "$upstream_sha" != "$locked_sha" ]]; then
             echo 'Upstream drift detected. Import it on a feature branch and use a reviewed protected-lineage PR.' >&2
             exit 1

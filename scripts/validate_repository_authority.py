@@ -12,6 +12,19 @@ ROOT = Path(__file__).resolve().parents[1]
 SHA = re.compile(r"^[0-9a-f]{40}$")
 IMAGE = re.compile(r"^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$")
 BRANCHES = ["development", "test", "staging", "production", "main"]
+UPSTREAM_AUTHORITY = {
+    "schema_version": "1.1",
+    "component": "opentelemetry-collector",
+    "codestra_repository": "appolon1908-hue/Codestra-Telemetry",
+    "upstream_repository": "open-telemetry/opentelemetry-collector",
+    "upstream_clone_url": "https://github.com/open-telemetry/opentelemetry-collector.git",
+    "upstream_ref": "main",
+    "import_path": "upstream",
+    "import_mode": "shallow-source-snapshot",
+    "preserve_upstream_license": True,
+    "branches": BRANCHES,
+    "deployment_enabled": False,
+}
 REQUIRED = (
     "README.md",
     "REPOSITORY_PROFILE.md",
@@ -50,6 +63,51 @@ def load(relative: str) -> dict:
     return value
 
 
+def validate_upstream_metadata(authority: dict, lock: dict) -> None:
+    if authority != UPSTREAM_AUTHORITY:
+        fail("canonical upstream authority identity mismatch")
+    if lock.get("schema_version") != "1.1":
+        fail("upstream lock schema must be 1.1")
+    for key in ("upstream_repository", "upstream_clone_url", "upstream_ref", "import_path"):
+        if lock.get(key) != authority[key]:
+            fail(f"upstream authority and lock disagree: {key}")
+    if authority.get("deployment_enabled") is not False or lock.get("deployment_enabled") is not False:
+        fail("source authority may not activate deployment")
+    for key in ("upstream_commit", "imported_tree_sha"):
+        if not SHA.fullmatch(str(lock.get(key, ""))):
+            fail(f"invalid upstream lock field: {key}")
+
+
+def verify_remote_upstream_tree(authority: dict, lock: dict) -> None:
+    fetch = subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "--depth=1",
+            "--filter=blob:none",
+            authority["upstream_clone_url"],
+            lock["upstream_commit"],
+        ],
+        cwd=ROOT,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=60,
+    )
+    if fetch.returncode != 0:
+        fail("cannot resolve exact canonical upstream commit")
+    remote_tree = subprocess.run(
+        ["git", "rev-parse", "FETCH_HEAD^{tree}"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if remote_tree != lock["imported_tree_sha"]:
+        fail("locked upstream commit tree differs from the imported tree lock")
+
+
 def main() -> None:
     missing = [relative for relative in REQUIRED if not (ROOT / relative).is_file()]
     if missing:
@@ -57,17 +115,8 @@ def main() -> None:
 
     authority = load("CODESTRA_UPSTREAM.json")
     lock = load("CODESTRA_UPSTREAM_LOCK.json")
-    if authority.get("schema_version") != "1.1" or lock.get("schema_version") != "1.1":
-        fail("upstream authority schema must be 1.1")
-    if authority.get("codestra_repository") != "appolon1908-hue/Codestra-Telemetry":
-        fail("repository identity mismatch")
-    if authority.get("branches") != BRANCHES:
-        fail("promotion branch model mismatch")
-    if authority.get("deployment_enabled") is not False or lock.get("deployment_enabled") is not False:
-        fail("source authority may not activate deployment")
-    for key in ("upstream_commit", "imported_tree_sha"):
-        if not SHA.fullmatch(str(lock.get(key, ""))):
-            fail(f"invalid upstream lock field: {key}")
+    validate_upstream_metadata(authority, lock)
+    verify_remote_upstream_tree(authority, lock)
     tree = subprocess.run(
         ["git", "rev-parse", "HEAD:upstream"],
         cwd=ROOT,
