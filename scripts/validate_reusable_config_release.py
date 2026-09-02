@@ -12,6 +12,7 @@ WORKFLOW = ROOT / ".github/workflows/reusable-release-config-bundle.yml"
 REQUIRED = (
     "workflow_call:",
     "protected_source_sha:",
+    'test "$GITHUB_REF" = "refs/heads/production"',
     "test \"$(git rev-parse origin/production)\" = \"$SOURCE_SHA\"",
     "persist-credentials: false",
     "packages: write",

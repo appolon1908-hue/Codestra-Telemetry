@@ -36,6 +36,13 @@ class ReusableReleaseAuthorityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "origin/production"):
             VALIDATOR.validate(source)
 
+    def test_removed_caller_production_ref_gate_is_rejected(self) -> None:
+        source = self.source.replace(
+            'test "$GITHUB_REF" = "refs/heads/production"', "true"
+        )
+        with self.assertRaisesRegex(ValueError, "refs/heads/production"):
+            VALIDATOR.validate(source)
+
     def test_latest_tool_reference_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "mutable latest"):
             VALIDATOR.validate(self.source + "\n# tool:latest\n")
