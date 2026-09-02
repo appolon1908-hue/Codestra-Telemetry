@@ -42,7 +42,8 @@ Receives approved metrics, logs, and traces; enriches and redacts telemetry; app
 
 ## Governance and safety
 
-- Promotion model: `feature/docs/fix/security/upgrade -> development -> test -> staging -> production -> main`.
+- Temporary branches use one explicit prefix: `feature/*`, `docs/*`, `fix/*`, `security/*`, or `upgrade/*`.
+- Promotion path: `development -> test -> staging -> production -> main`.
 - Native OTLP ports `4317/4318` and diagnostics must remain private or protected by approved network controls.
 - Never commit exporter credentials, private keys, customer payloads, tokens, or secret-bearing telemetry fixtures.
 - New receivers/exporters require ownership, security, cardinality, and retention review.
