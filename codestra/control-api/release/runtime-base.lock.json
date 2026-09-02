@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0.0",
+  "artifactModel": "repository-built-signed-image",
+  "imageId": "control-api",
+  "buildFrontendImage": "docker.io/docker/dockerfile@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+  "builderVersion": "go1.26.7",
+  "builderImage": "docker.io/library/golang@sha256:e8c859f5632dcfde7b32d2012b4351728f6437930887c2f6a91ea242459e5514",
+  "builderLinuxAmd64Manifest": "sha256:659cc38c1a394eeb4dd7e31fff6df128bd33444dcc7afd70e3bed5225749dbc0",
+  "runtimeBaseImage": "gcr.io/distroless/static-debian12@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab",
+  "runtimeLinuxAmd64Manifest": "sha256:52dcfbabb7457ea47c82f6e13af8c8a4a1d9f7b0145142b3ecab20f2b888411d",
+  "productionActivation": false
+}
