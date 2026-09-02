@@ -1,0 +1,11 @@
+*
+!.dockerignore
+!codestra/
+codestra/*
+!codestra/collector.yaml
+!codestra/deploy/
+!codestra/deploy/Dockerfile
+!codestra/deploy/healthcheck.go
+!codestra/release/
+!codestra/release/image-build.v1.json
+!codestra/release/runtime-base.lock.json

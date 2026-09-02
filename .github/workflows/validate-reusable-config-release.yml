@@ -1,0 +1,42 @@
+name: Validate reusable configuration release authority
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/reusable-release-config-bundle.yml
+      - .github/workflows/validate-reusable-config-release.yml
+      - scripts/validate_reusable_config_release.py
+      - tests/test_reusable_config_release.py
+
+permissions:
+  contents: read
+
+jobs:
+  validate-source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove and validate exact source
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python3 scripts/validate_reusable_config_release.py
+          python3 -m unittest discover -s tests -p 'test_reusable_config_release.py'
+          git diff --check "$BASE_SHA" "$HEAD_SHA"
+  validate-merge-result:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Prove and validate merge result
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 scripts/validate_reusable_config_release.py
+          python3 -m unittest discover -s tests -p 'test_reusable_config_release.py'

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "artifactModel": "repository-configured-signed-image",
+  "imageId": "opentelemetry",
+  "buildFrontendImage": "docker.io/docker/dockerfile@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+  "builderVersion": "go1.26.7",
+  "builderImage": "docker.io/library/golang@sha256:e8c859f5632dcfde7b32d2012b4351728f6437930887c2f6a91ea242459e5514",
+  "builderLinuxAmd64Manifest": "sha256:659cc38c1a394eeb4dd7e31fff6df128bd33444dcc7afd70e3bed5225749dbc0",
+  "upstreamRelease": "0.159.0",
+  "upstreamReleaseLinuxAmd64ArchiveSha256": "sha256:9d589f6349f01179957a2052bc7307a99db2efc971e14e00575941a77122eaaf",
+  "upstreamReleaseRepository": "open-telemetry/opentelemetry-collector-releases",
+  "upstreamReleaseCommit": "f817832365a9a2b829bc7c25feffcf8834585dea",
+  "upstreamContribCommit": "1120cc0714bf4d14600105e5673c3b00fe87467a",
+  "upstreamSignedTagsVerified": true,
+  "upstreamImage": "docker.io/otel/opentelemetry-collector-contrib@sha256:1f2c54a30e713fac6b3ae77a1ec84010c2007e29ced8ec666214fc2f6739c1cc",
+  "upstreamLinuxAmd64Manifest": "sha256:4f4276c07cee9055f2ab630a86330243f85e208c388ee697bea2a44dab896c3f",
+  "vendoredSourceExecutableUsed": false,
+  "productionActivation": false
+}
