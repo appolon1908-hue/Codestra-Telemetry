@@ -26,6 +26,17 @@ REQUIRED = (
     "codestra/release/image-build.v1.json",
     "codestra/control-api/release/image-build.v1.json",
 )
+UPSTREAM_TEST_KEY_ALLOWLIST = {
+    r"^upstream/config/configgrpc/testdata/client\.key$",
+    r"^upstream/config/configgrpc/testdata/server\.key$",
+    r"^upstream/config/confighttp/testdata/client\.key$",
+    r"^upstream/config/confighttp/testdata/server\.key$",
+    r"^upstream/config/configtls/testdata/client-1\.key$",
+    r"^upstream/config/configtls/testdata/client-2\.key$",
+    r"^upstream/config/configtls/testdata/server-1\.key$",
+    r"^upstream/config/configtls/testdata/server-2\.key$",
+    r"^upstream/exporter/otlpexporter/testdata/test_key\.pem$",
+}
 
 
 def fail(message: str) -> None:
@@ -66,6 +77,11 @@ def main() -> None:
     ).stdout.strip()
     if tree != lock["imported_tree_sha"]:
         fail("vendored upstream tree differs from its lock")
+
+    gitleaks = (ROOT / ".gitleaks.toml").read_text(encoding="utf-8")
+    allowlisted_paths = set(re.findall(r"(?m)^\s*'''([^']+)''',?\s*$", gitleaks))
+    if gitleaks.count("[[allowlists]]") != 1 or allowlisted_paths != UPSTREAM_TEST_KEY_ALLOWLIST:
+        fail("gitleaks exception set must contain only the locked upstream test keys")
 
     for relative in (
         "codestra/release/image-build.v1.json",

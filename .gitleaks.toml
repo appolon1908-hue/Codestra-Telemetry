@@ -2,3 +2,17 @@ title = "Codestra Telemetry secret scanning"
 
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Locked upstream Collector test-only private keys"
+paths = [
+  '''^upstream/config/configgrpc/testdata/client\.key$''',
+  '''^upstream/config/configgrpc/testdata/server\.key$''',
+  '''^upstream/config/confighttp/testdata/client\.key$''',
+  '''^upstream/config/confighttp/testdata/server\.key$''',
+  '''^upstream/config/configtls/testdata/client-1\.key$''',
+  '''^upstream/config/configtls/testdata/client-2\.key$''',
+  '''^upstream/config/configtls/testdata/server-1\.key$''',
+  '''^upstream/config/configtls/testdata/server-2\.key$''',
+  '''^upstream/exporter/otlpexporter/testdata/test_key\.pem$''',
+]

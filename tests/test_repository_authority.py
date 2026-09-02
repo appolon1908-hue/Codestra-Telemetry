@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -34,6 +35,13 @@ class RepositoryAuthorityTests(unittest.TestCase):
             "codestra/control-api/release/image-build.v1.json",
         ):
             self.assertFalse(json.loads((ROOT / relative).read_text())["productionActivation"])
+
+    def test_secret_scan_exceptions_are_exact_test_fixtures(self) -> None:
+        config = (ROOT / ".gitleaks.toml").read_text()
+        paths = re.findall(r"(?m)^\s*'''([^']+)''',?\s*$", config)
+        self.assertEqual(len(paths), 9)
+        self.assertTrue(all(path.startswith("^upstream/") and path.endswith("$") for path in paths))
+        self.assertTrue(all("testdata/" in path for path in paths))
 
 
 if __name__ == "__main__":
