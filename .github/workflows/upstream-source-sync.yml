@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - CODESTRA_UPSTREAM.json
+      - CODESTRA_UPSTREAM_LOCK.json
+      - upstream/**
       - .github/workflows/upstream-source-sync.yml
   workflow_dispatch:
 
@@ -45,8 +47,11 @@ jobs:
           [[ "$IMPORT_PATH" == upstream ]] || exit 2
           upstream_sha="$(git ls-remote "$UPSTREAM_URL" "refs/heads/$UPSTREAM_REF" | awk 'NR == 1 {print $1}')"
           locked_sha="$(python3 -c 'import json; print(json.load(open("CODESTRA_UPSTREAM_LOCK.json"))["upstream_commit"])')"
+          locked_tree="$(python3 -c 'import json; print(json.load(open("CODESTRA_UPSTREAM_LOCK.json"))["imported_tree_sha"])')"
           [[ "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]
           [[ "$locked_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$locked_tree" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD:upstream)" = "$locked_tree"
           if [[ "$upstream_sha" != "$locked_sha" ]]; then
             echo 'Upstream drift detected. Import it on a feature branch and use a reviewed protected-lineage PR.' >&2
             exit 1
