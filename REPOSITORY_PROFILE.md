@@ -4,7 +4,9 @@
 
 - Repository: `appolon1908-hue/Codestra-Telemetry`
 - Upstream Collector source: `open-telemetry/opentelemetry-collector`, exact
-  snapshot in `CODESTRA_UPSTREAM_LOCK.json`
+  snapshot in `CODESTRA_UPSTREAM_LOCK.json`; CI fetches the attributed commit
+  from the canonical remote and requires its root tree to equal the vendored
+  tree
 - Accepted Collector distribution: Contrib `0.159.0`, exact image and linux/amd64
   manifest in `codestra/release/runtime-base.lock.json`
 - Branch model: `development -> test -> staging -> production -> main`
