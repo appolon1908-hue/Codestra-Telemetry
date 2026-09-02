@@ -66,7 +66,17 @@ jobs:
 
           image_id, manifest_path = sys.argv[1:]
           root = Path.cwd().resolve()
-          manifest = json.loads(Path(manifest_path).read_text())
+          def unique_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise SystemExit(f"duplicate JSON key in image build manifest: {key}")
+                  result[key] = value
+              return result
+
+          manifest = json.loads(
+              Path(manifest_path).read_text(), object_pairs_hook=unique_object
+          )
           if manifest.get("schemaVersion") != "1.0.0":
               raise SystemExit("unsupported image build manifest")
           if manifest.get("imageId") != image_id:
@@ -99,17 +109,39 @@ jobs:
           if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*_IMAGE", key) or not image.fullmatch(value) for key, value in args.items()):
               raise SystemExit("build arguments must be named immutable image identities")
           dockerfile = (root / paths["dockerfile"]).read_text()
+          first_line = dockerfile.splitlines()[0] if dockerfile.splitlines() else ""
+          if not re.fullmatch(
+              r"# syntax=[a-z0-9./_-]+@sha256:[0-9a-f]{64}", first_line
+          ):
+              raise SystemExit("Dockerfile frontend must be pinned by exact sha256 digest")
           if "latest" in dockerfile.lower():
               raise SystemExit("Dockerfile contains a mutable latest reference")
           declared = set(re.findall(r"(?m)^ARG\s+([A-Z][A-Z0-9_]*_IMAGE)(?:=.*)?$", dockerfile))
           if declared != set(args):
               raise SystemExit("Dockerfile image ARGs do not equal the build manifest")
-          for source in re.findall(r"(?mi)^FROM\s+([^\s]+)", dockerfile):
+          stages = set()
+          from_lines = re.findall(
+              r"(?mi)^FROM\s+(?:--platform=[^\s]+\s+)?([^\s]+)(?:\s+AS\s+([A-Za-z0-9._-]+))?",
+              dockerfile,
+          )
+          for source, stage in from_lines:
               match = re.fullmatch(r"\$\{([A-Z][A-Z0-9_]*_IMAGE)\}", source)
+              if not (match and match.group(1) in args) and not image.fullmatch(source):
+                  raise SystemExit(f"uncontrolled Dockerfile base image: {source}")
+              if stage:
+                  stages.add(stage)
+          for copy_line in re.findall(r"(?mi)^COPY\s+(.+)$", dockerfile):
+              external = re.search(r"(?:^|\s)--from=([^\s]+)", copy_line)
+              if not external:
+                  continue
+              source = external.group(1)
+              match = re.fullmatch(r"\$\{([A-Z][A-Z0-9_]*_IMAGE)\}", source)
+              if source in stages or source.isdigit():
+                  continue
               if match and match.group(1) in args:
                   continue
               if not image.fullmatch(source):
-                  raise SystemExit(f"uncontrolled Dockerfile base image: {source}")
+                  raise SystemExit(f"uncontrolled external COPY source: {source}")
           PY
       - name: Install checksum-verified inventory and scan tools
         run: |
