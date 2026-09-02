@@ -6,6 +6,7 @@ on:
       - "codestra/**"
       - "scripts/validate_codestra_collector.py"
       - "scripts/validate_codestra_telemetry.py"
+      - "scripts/validate_collector_image_readiness.py"
       - ".github/workflows/validate-codestra-collector.yml"
   push:
     branches: [development, test, staging, production, main]
@@ -13,6 +14,7 @@ on:
       - "codestra/**"
       - "scripts/validate_codestra_collector.py"
       - "scripts/validate_codestra_telemetry.py"
+      - "scripts/validate_collector_image_readiness.py"
       - ".github/workflows/validate-codestra-collector.yml"
 
 permissions:
@@ -28,10 +30,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Check out exact head
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.13"
 
@@ -44,6 +46,7 @@ jobs:
         run: |
           python -m py_compile scripts/validate_codestra_collector.py scripts/validate_codestra_telemetry.py
           python scripts/validate_codestra_collector.py
+          python scripts/validate_collector_image_readiness.py
 
       - name: Download and verify official Collector Contrib validator
         run: |
@@ -52,10 +55,7 @@ jobs:
           base="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${version}"
           asset="otelcol-contrib_${version}_linux_amd64.tar.gz"
           curl --fail --location --silent --show-error --output "/tmp/${asset}" "${base}/${asset}"
-          curl --fail --location --silent --show-error --output "/tmp/${asset}.sha256" "${base}/${asset}.sha256"
-          expected="$(awk 'NR == 1 {print $1}' "/tmp/${asset}.sha256")"
-          [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
-          printf '%s  %s\n' "$expected" "/tmp/${asset}" | sha256sum --check
+          printf '%s  %s\n' 9d589f6349f01179957a2052bc7307a99db2efc971e14e00575941a77122eaaf "/tmp/${asset}" | sha256sum --check
           tar -xzf "/tmp/${asset}" -C /tmp otelcol-contrib
           /tmp/otelcol-contrib --version
 
@@ -73,28 +73,24 @@ jobs:
 
       - name: Render and inspect private runtime authority
         env:
-          GO_BUILDER_IMAGE: golang:9.9@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          OTELCOL_BASE_IMAGE: otel/opentelemetry-collector-contrib:0.159.0@sha256:1111111111111111111111111111111111111111111111111111111111111111
-          CODESTRA_OTELCOL_IMAGE: ghcr.io/appolon1908-hue/codestra-telemetry:ci@sha256:2222222222222222222222222222222222222222222222222222222222222222
-          CODESTRA_BUSINESS: platform
+          CODESTRA_OTELCOL_IMAGE: ghcr.io/appolon1908-hue/codestra-telemetry-opentelemetry@sha256:2222222222222222222222222222222222222222222222222222222222222222
+          CODESTRA_SOURCE_SHA: "0000000000000000000000000000000000000000"
+          CODESTRA_IMAGE_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
           CODESTRA_ENVIRONMENT: test
           CODESTRA_REGION: ci
           CODESTRA_SERVER: github-actions
+          CODESTRA_OTELCOL_DEPLOYMENT_ID: ci-immutable-deployment
           CODESTRA_BUSINESS_TELEMETRY_NETWORK: codestra-telemetry-platform
           CODESTRA_OBSERVABILITY_NETWORK: codestra-observability
-          TEMPO_OTLP_GRPC_ENDPOINT: tempo:4317
-          TEMPO_TLS_SERVER_NAME: temp.codestra.media
-          LOKI_OTLP_HTTP_ENDPOINT: https://loki:3100/otlp
-          LOKI_TLS_SERVER_NAME: loki.codestra.media
-          OTELCOL_SERVER_CERT_SECRET_NAME: otelcol-server-cert-ci
-          OTELCOL_SERVER_KEY_SECRET_NAME: otelcol-server-key-ci
-          OTELCOL_CLIENT_CA_SECRET_NAME: otelcol-client-ca-ci
-          OTELCOL_BACKEND_CA_SECRET_NAME: otelcol-backend-ca-ci
+          OTELCOL_SERVER_CERT_FILE_SOURCE: /tmp/otelcol-server-cert-ci
+          OTELCOL_SERVER_KEY_FILE_SOURCE: /tmp/otelcol-server-key-ci
+          OTELCOL_CLIENT_CA_FILE_SOURCE: /tmp/otelcol-client-ca-ci
+          OTELCOL_BACKEND_CA_FILE_SOURCE: /tmp/otelcol-backend-ca-ci
           OTEL_COLLECTOR_MEMORY_LIMIT: 1g
           OTEL_COLLECTOR_CPU_LIMIT: "2.0"
           OTEL_COLLECTOR_GOMEMLIMIT: 768MiB
         run: |
-          docker compose -f codestra/compose.yaml config --format json > /tmp/compose.json
+          docker compose --profile candidate-after-approval -f codestra/compose.candidate.yaml config --format json > /tmp/compose.json
           python3 - <<'PY'
           import json
           import re
@@ -104,8 +100,10 @@ jobs:
           service = config['services']['otel-collector']
           immutable = re.compile(r'^[^@\s]+@sha256:[0-9a-f]{64}$')
           assert immutable.fullmatch(service['image'])
-          assert immutable.fullmatch(service['build']['args']['GO_BUILDER_IMAGE'])
-          assert immutable.fullmatch(service['build']['args']['OTELCOL_BASE_IMAGE'])
+          assert 'build' not in service
+          assert service['environment']['CODESTRA_BUSINESS'] == 'platform'
+          assert service['environment']['CODESTRA_SOURCE_SHA'] == '0000000000000000000000000000000000000000'
+          assert service['environment']['CODESTRA_IMAGE_DIGEST'].startswith('sha256:')
           assert service['user'] == '10001:10001'
           assert service['read_only'] is True
           assert service['cap_drop'] == ['ALL']
@@ -126,6 +124,7 @@ jobs:
           assert config['networks']['codestra-observability']['external'] is True
           assert config['volumes']['otelcol-storage']['external'] is True
           assert config['volumes']['otelcol-storage']['name'] == 'codestra-platform-otelcol-storage'
+          assert service['labels']['codestra.business'] == 'platform'
           assert not any('/etc/otelcol-contrib/config.yaml' in str(item) for item in service.get('volumes', []))
           PY
 
