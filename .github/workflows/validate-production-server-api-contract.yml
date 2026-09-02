@@ -27,8 +27,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.13'
       - name: Validate source-only production contract and server handoff
@@ -89,7 +89,9 @@ jobs:
               'appolon1908-hue/Codestra-Node-Exporter',
               'appolon1908-hue/Codestra-cAdvisor',
               'appolon1908-hue/Codestra-Redis-Exporter',
+              'appolon1908-hue/Codestra-Postgres-Exporter',
               'appolon1908-hue/Codestra-Blackbox-Exporter',
+              'appolon1908-hue/Codestra-Alertmanager',
               'appolon1908-hue/Superset',
               'appolon1908-hue/Codestra-OpenBao',
               'EXACT_HEAD_CI=PASS',
@@ -100,7 +102,7 @@ jobs:
           ]
           missing = [value for value in handoff_required if value not in handoff]
           assert not missing, f'missing cross-suite handoff controls: {missing}'
-          assert handoff.count('appolon1908-hue/') == 12, 'handoff must list exactly twelve product repositories'
+          assert handoff.count('appolon1908-hue/') == 14, 'handoff must list exactly fourteen product repositories'
 
           forbidden = [
               'ADMIN_BYPASS_AUTHORIZED=YES',

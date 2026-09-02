@@ -1,4 +1,4 @@
-# Codestra Observability 1–12 Production Server Handoff
+# Codestra Observability 14-Authority Repository Handoff
 
 ## Server placement
 
@@ -10,7 +10,9 @@ SSH_CONFIGURATION_CHANGES_AUTHORIZED=NO
 ADMIN_BYPASS_AUTHORIZED=NO
 ```
 
-The twelve central observability, analytics, and secrets-management components are installed on `37.27.128.39`. After the central host is certified, only approved Alloy, Node Exporter, cAdvisor, Redis Exporter, Blackbox target, and OpenTelemetry application-export extensions may be installed on `65.109.65.169` through a separate governed change. Prometheus, Grafana, Loki, Tempo, Superset, and OpenBao remain central authorities and are not duplicated on the core application host.
+The central host placement is Prometheus, Grafana, Alertmanager, Loki, Tempo, Blackbox Exporter, Superset, OpenBao, the observability control API, and a central OpenTelemetry receiver when required. The core application host placement is Alloy, an OpenTelemetry Collector agent, Node Exporter, cAdvisor, Redis Exporter, and PostgreSQL Exporter. Prometheus, Grafana, Loki, Tempo, Superset, and OpenBao remain central authorities and are not duplicated on the core application host.
+
+This repository handoff does not authorize either placement. The later server mission may install only artifacts already verified in the canonical source lock and production BOM.
 
 ## Repository-owned production/API contracts
 
@@ -25,9 +27,11 @@ The twelve central observability, analytics, and secrets-management components a
 | Node Exporter | `appolon1908-hue/Codestra-Node-Exporter` | #22 |
 | cAdvisor | `appolon1908-hue/Codestra-cAdvisor` | #19 |
 | Redis Exporter | `appolon1908-hue/Codestra-Redis-Exporter` | #19 |
+| PostgreSQL Exporter | `appolon1908-hue/Codestra-Postgres-Exporter` | #7 |
 | Blackbox Exporter | `appolon1908-hue/Codestra-Blackbox-Exporter` | #19 |
+| Alertmanager | `appolon1908-hue/Codestra-Alertmanager` | #6 |
 | Superset | `appolon1908-hue/Superset` | #18 |
-| OpenBao | `appolon1908-hue/Codestra-OpenBao` | #34 |
+| OpenBao | `appolon1908-hue/Codestra-OpenBao` | #33 |
 
 Each repository owns its native API surface, authentication and authorization boundary, business isolation, image construction, tests, release evidence, backup/recovery, and rollback. The handoff does not create a thirteenth runtime or a duplicate API gateway.
 
@@ -59,8 +63,8 @@ Any new commit invalidates approval for the prior head. Do not deploy from a rev
 Before Codex connects to `37.27.128.39`, require:
 
 ```text
-REPOSITORIES_READY=12/12
-PRODUCTION_BRANCHES_RECONCILED=12/12
+REPOSITORIES_READY=14/14
+PRODUCTION_BRANCHES_RECONCILED=14/14
 SOURCE_LOCK=PASS
 IMMUTABLE_IMAGES=PASS
 SIGNED_RELEASES=PASS
