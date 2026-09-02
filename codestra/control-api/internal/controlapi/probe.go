@@ -23,12 +23,12 @@ type CheckResult struct {
 }
 
 type ServiceHealth struct {
-	ServiceID string      `json:"serviceId"`
-	Configured bool       `json:"configured"`
-	State     string      `json:"state"`
-	Health    CheckResult `json:"health"`
-	Readiness CheckResult `json:"readiness"`
-	CheckedAt time.Time   `json:"checkedAt"`
+	ServiceID  string      `json:"serviceId"`
+	Configured bool        `json:"configured"`
+	State      string      `json:"state"`
+	Health     CheckResult `json:"health"`
+	Readiness  CheckResult `json:"readiness"`
+	CheckedAt  time.Time   `json:"checkedAt"`
 }
 
 type Prober interface {
@@ -42,7 +42,7 @@ func (HTTPProber) Probe(ctx context.Context, service Service, correlationID stri
 	baseValue := strings.TrimSpace(os.Getenv(service.BaseURLEnv))
 	if baseValue == "" {
 		return ServiceHealth{
-			ServiceID: service.ID,
+			ServiceID:  service.ID,
 			Configured: false,
 			State:      "unconfigured",
 			Health:     CheckResult{State: "unknown", Reason: "missing_base_url"},
@@ -53,7 +53,7 @@ func (HTTPProber) Probe(ctx context.Context, service Service, correlationID stri
 	baseURL, err := validateBaseURL(baseValue)
 	if err != nil {
 		return ServiceHealth{
-			ServiceID: service.ID,
+			ServiceID:  service.ID,
 			Configured: true,
 			State:      "invalid_configuration",
 			Health:     CheckResult{State: "unknown", Reason: "invalid_base_url"},
@@ -64,7 +64,7 @@ func (HTTPProber) Probe(ctx context.Context, service Service, correlationID stri
 	client, err := clientFor(service)
 	if err != nil {
 		return ServiceHealth{
-			ServiceID: service.ID,
+			ServiceID:  service.ID,
 			Configured: true,
 			State:      "invalid_configuration",
 			Health:     CheckResult{State: "unknown", Reason: "invalid_transport_configuration"},
@@ -75,7 +75,7 @@ func (HTTPProber) Probe(ctx context.Context, service Service, correlationID stri
 	token, err := bearerToken(service.Auth.BearerTokenFileEnv)
 	if err != nil {
 		return ServiceHealth{
-			ServiceID: service.ID,
+			ServiceID:  service.ID,
 			Configured: true,
 			State:      "invalid_configuration",
 			Health:     CheckResult{State: "unknown", Reason: "credential_file_unavailable"},
@@ -94,7 +94,7 @@ func (HTTPProber) Probe(ctx context.Context, service Service, correlationID stri
 		state = "degraded"
 	}
 	return ServiceHealth{
-		ServiceID: service.ID,
+		ServiceID:  service.ID,
 		Configured: true,
 		State:      state,
 		Health:     health,
