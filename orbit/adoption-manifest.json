@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "2.0.0",
+  "repository": "appolon1908-hue/Codestra-Telemetry",
+  "classification": "observability-backend",
+  "targetBranch": "codex/codestra-orbit-v2-codestra-telemetry",
+  "adoptionMode": "contract-only",
+  "domain": null,
+  "domainStatus": "not-applicable",
+  "requirements": {
+    "noFabricatedBrowserUi": true,
+    "privateRouting": true,
+    "identityBoundary": true,
+    "telemetryContract": true,
+    "immutableArtifacts": true,
+    "monitoring": true,
+    "rollback": true
+  },
+  "status": "branch-created",
+  "blockers": [
+    "Verify telemetry schemas, tenant/service identity, collection/export boundaries, private routing, immutable version, monitoring, and rollback.",
+    "Do not add customer login, logout, header, footer, or public content endpoints; rendered presentation belongs in approved applications."
+  ]
+}
