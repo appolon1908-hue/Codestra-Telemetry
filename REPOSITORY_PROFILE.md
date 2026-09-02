@@ -8,6 +8,8 @@
 - Accepted Collector distribution: Contrib `0.159.0`, exact image and linux/amd64
   manifest in `codestra/release/runtime-base.lock.json`
 - Branch model: `development -> test -> staging -> production -> main`
+- Temporary branches: `feature/*`, `docs/*`, `fix/*`, `security/*`,
+  `upgrade/*`, `hotfix/*`, and, when needed, `release/*` or `rollback/*`
 - Exposure: `internal_private`
 - Current verdict: `REPO_RELEASE_READY=BLOCKED` until protected production
   merges and two signed immutable OCI releases exist and are centrally locked
@@ -28,6 +30,9 @@ retain `productionActivation=false`.
 Canonical non-activating manifests are `codestra/compose.candidate.yaml` and
 `codestra/control-api/compose.candidate.yaml`. Neither contains a build path,
 host port, mutable image, secret value, or default-active service profile.
+Native OTLP, health, diagnostics, metrics, and control API ports remain private;
+an authenticated public wrapper would be a separate authority and may not make
+these native listeners Internet-accessible.
 
 ## Dependencies and consumers
 

@@ -85,6 +85,8 @@ def main() -> None:
         "REPO_RELEASE_READY=BLOCKED",
         "internal_private",
         "development -> test -> staging -> production -> main",
+        "hotfix/*",
+        "Native OTLP, health, diagnostics, metrics, and control API ports remain private",
         "productionActivation=false",
         "does not start a workload",
     ):
