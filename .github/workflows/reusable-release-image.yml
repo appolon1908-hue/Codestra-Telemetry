@@ -83,6 +83,9 @@ jobs:
               raise SystemExit("image build manifest identity mismatch")
           if manifest.get("productionActivation") is not False:
               raise SystemExit("image build manifest may not activate production")
+          embed_source_revision = manifest.get("embedSourceRevision", False)
+          if not isinstance(embed_source_revision, bool):
+              raise SystemExit("embedSourceRevision must be a boolean")
           if not re.fullmatch(r"[A-Za-z0-9.-]+", str(manifest.get("license", ""))):
               raise SystemExit("image build manifest requires an SPDX license expression")
           description = manifest.get("description", "")
@@ -119,6 +122,19 @@ jobs:
           declared = set(re.findall(r"(?m)^ARG\s+([A-Z][A-Z0-9_]*_IMAGE)(?:=.*)?$", dockerfile))
           if declared != set(args):
               raise SystemExit("Dockerfile image ARGs do not equal the build manifest")
+          if embed_source_revision and not re.search(
+              r"(?m)^ARG\s+CODESTRA_SOURCE_SHA(?:=.*)?$", dockerfile
+          ):
+              raise SystemExit(
+                  "source-embedding image must declare ARG CODESTRA_SOURCE_SHA"
+              )
+          if embed_source_revision and not re.search(
+              r"(?m)^ENV\s+CODESTRA_IMAGE_SOURCE_SHA=\$\{CODESTRA_SOURCE_SHA\}$",
+              dockerfile,
+          ):
+              raise SystemExit(
+                  "source-embedding image must persist CODESTRA_IMAGE_SOURCE_SHA"
+              )
           stages = set()
           from_lines = re.findall(
               r"(?mi)^FROM\s+(?:--platform=[^\s]+\s+)?([^\s]+)(?:\s+AS\s+([A-Za-z0-9._-]+))?",
@@ -180,6 +196,7 @@ jobs:
           context="$(jq -r '.context' "$BUILD_MANIFEST")"
           license="$(jq -r '.license' "$BUILD_MANIFEST")"
           description="$(jq -r '.description' "$BUILD_MANIFEST")"
+          embed_source_revision="$(jq -r '.embedSourceRevision // false' "$BUILD_MANIFEST")"
           created="$(git show -s --format=%cI "$SOURCE_SHA")"
           mapfile -t argument_names < <(jq -r '.buildArgs | keys[]' "$BUILD_MANIFEST")
           build_args=()
@@ -187,6 +204,7 @@ jobs:
             value="$(jq -r --arg name "$name" '.buildArgs[$name]' "$BUILD_MANIFEST")"
             build_args+=(--build-arg "${name}=${value}")
           done
+          build_args+=(--build-arg "CODESTRA_SOURCE_SHA=${SOURCE_SHA}")
           docker buildx build --load --platform linux/amd64 --file "$dockerfile" "${build_args[@]}" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
@@ -196,6 +214,11 @@ jobs:
             --label "org.opencontainers.image.created=${created}" \
             --label "org.opencontainers.image.licenses=${license}" \
             --tag "local/codestra-${IMAGE_ID}:${SOURCE_SHA}" "$context"
+          if [[ "$embed_source_revision" == true ]]; then
+            embedded_source="$(docker image inspect "local/codestra-${IMAGE_ID}:${SOURCE_SHA}" \
+              --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^CODESTRA_IMAGE_SOURCE_SHA=' || true)"
+            test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=${SOURCE_SHA}"
+          fi
           trivy image --exit-code 1 --severity HIGH,CRITICAL "local/codestra-${IMAGE_ID}:${SOURCE_SHA}"
       - name: Authenticate and reject existing release label
         id: target
@@ -234,6 +257,7 @@ jobs:
             value="$(jq -r --arg name "$name" '.buildArgs[$name]' "$BUILD_MANIFEST")"
             build_args+=(--build-arg "${name}=${value}")
           done
+          build_args+=(--build-arg "CODESTRA_SOURCE_SHA=${SOURCE_SHA}")
           docker buildx build \
             --platform linux/amd64 \
             --file "$dockerfile" \
@@ -256,6 +280,7 @@ jobs:
           echo "identity=${REGISTRY}@${digest}" >> "$GITHUB_OUTPUT"
       - name: Pull, inspect, inventory and scan exact digest
         env:
+          BUILD_MANIFEST: ${{ inputs.build_manifest_path }}
           IDENTITY: ${{ steps.build.outputs.identity }}
           SOURCE_SHA: ${{ inputs.protected_source_sha }}
           IMAGE_ID: ${{ inputs.image_id }}
@@ -263,6 +288,11 @@ jobs:
           docker pull "$IDENTITY"
           revision="$(docker image inspect "$IDENTITY" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
           test "$revision" = "$SOURCE_SHA"
+          if [[ "$(jq -r '.embedSourceRevision // false' "$BUILD_MANIFEST")" == true ]]; then
+            embedded_source="$(docker image inspect "$IDENTITY" \
+              --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^CODESTRA_IMAGE_SOURCE_SHA=' || true)"
+            test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=${SOURCE_SHA}"
+          fi
           syft "$IDENTITY" -o "spdx-json=dist/${IMAGE_ID}.spdx.json"
           trivy image --exit-code 1 --severity HIGH,CRITICAL "$IDENTITY"
       - name: Resolve immutable reusable-workflow signer identity
