@@ -43,7 +43,8 @@ processors:
 
   resource/codestra:
     attributes:
-      - pattern: '(?i)^(codestra\.business|tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|enduser\.id|user\.(email|phone)|email|phone|token|secret|password|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_url|query_string|url\.full|http\.target|http\.url|db\.statement|exception\.message|process\.command_line|service\.instance\.id|host\.id|container\.id|k8s\.pod\.uid|process\.pid)$'
+      # Remove both caller spellings before installing the authoritative dotted key.
+      - pattern: '(?i)^(codestra\.business|codestra_business|tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|enduser\.id|user\.(email|phone)|email|phone|token|secret|password|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_url|query_string|url\.full|http\.target|http\.url|db\.statement|exception\.message|process\.command_line|service\.instance\.id|host\.id|container\.id|k8s\.pod\.uid|process\.pid)$'
         action: delete
       - key: codestra.business
         value: ${env:CODESTRA_BUSINESS}
@@ -66,7 +67,7 @@ processors:
 
   attributes/redact:
     actions:
-      - pattern: '(?i)^(authorization|proxy_authorization|cookie|set-cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|broker(\.|_).*(credential|signing_key)|exchange(\.|_).*(api_key|secret)|tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|enduser\.id|user\.(email|phone)|email|phone|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_path|path|uri|url|raw_url|query|query_string|client\.address|network\.peer\.address|db\.statement|exception\.message|service\.instance\.id|host\.id|container\.id|k8s\.pod\.uid|process\.pid)$'
+      - pattern: '(?i)^(authorization|proxy_authorization|cookie|set-cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|broker(\.|_).*(credential|signing_key)|exchange(\.|_).*(api_key|secret)|codestra\.business|codestra_business|tenant(\.id|_id|\.name|_name)|organization(\.id|_id|\.name|_name)|customer(\.id|_id|\.name|_name)|account(\.id|_id)|user(\.id|_id|\.name|_name)|enduser\.id|user\.(email|phone)|email|phone|session(\.id|_id)|request(\.id|_id)|correlation(\.id|_id)|trace(\.id|_id)|span(\.id|_id)|lead(\.id|_id)|order(\.id|_id)|message(\.id|_id)|workflow(\.id|_id)|execution(\.id|_id)|webhook(\.id|_id)|idempotency(\.key|_key)|raw_path|path|uri|url|raw_url|query|query_string|client\.address|network\.peer\.address|db\.statement|exception\.message|service\.instance\.id|host\.id|container\.id|k8s\.pod\.uid|process\.pid)$'
         action: delete
 
   filter/required_identity:
@@ -148,11 +149,11 @@ processors:
     trace_statements:
       - context: span
         statements:
-          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
+          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|codestra(\\.business|_business)|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
           - truncate_all(attributes, 4096)
       - context: spanevent
         statements:
-          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
+          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|codestra(\\.business|_business)|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
           - truncate_all(attributes, 4096)
 
   transform/logs:
@@ -160,7 +161,7 @@ processors:
     log_statements:
       - context: log
         statements:
-          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
+          - delete_matching_keys(attributes, "(?i)^(authorization|cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|private_key|database_url|dsn|codestra(\\.business|_business)|tenant(\\.id|_id)|customer(\\.id|_id)|account(\\.id|_id)|user(\\.id|_id)|email|phone|request(\\.id|_id)|correlation(\\.id|_id)|message(\\.id|_id)|order(\\.id|_id)|db\\.statement|exception\\.message)$")
           - truncate_all(attributes, 4096)
 
   tail_sampling:
