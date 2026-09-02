@@ -1,0 +1,267 @@
+name: Reusable signed image release
+
+on:
+  workflow_call:
+    inputs:
+      image_id:
+        description: Lowercase immutable workload image identifier
+        required: true
+        type: string
+      release_tag:
+        description: Human label codestra-IMAGE-vX.Y.Z
+        required: true
+        type: string
+      protected_source_sha:
+        description: Exact caller production head to build
+        required: true
+        type: string
+      calling_workflow_path:
+        description: Caller workflow filename used for keyless verification
+        required: true
+        type: string
+      build_manifest_path:
+        description: Repository-relative deterministic image build manifest
+        required: false
+        default: codestra/release/image-build.v1.json
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ inputs.protected_source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fail closed on caller, source and build authority
+        env:
+          IMAGE_ID: ${{ inputs.image_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+          CALLING_WORKFLOW_PATH: ${{ inputs.calling_workflow_path }}
+          BUILD_MANIFEST: ${{ inputs.build_manifest_path }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$IMAGE_ID" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+          [[ "$RELEASE_TAG" =~ ^codestra-${IMAGE_ID}-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CALLING_WORKFLOW_PATH" =~ ^[A-Za-z0-9._-]+\.ya?ml$ ]]
+          [[ "$BUILD_MANIFEST" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "$BUILD_MANIFEST" != /* && "$BUILD_MANIFEST" != *..* ]]
+          test "$GITHUB_REF" = "refs/heads/production"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git fetch --no-tags origin production
+          test "$(git rev-parse origin/production)" = "$SOURCE_SHA"
+          test -f "$BUILD_MANIFEST"
+          test ! -L "$BUILD_MANIFEST"
+          [[ "$(realpath -- "$BUILD_MANIFEST")" == "$GITHUB_WORKSPACE/"* ]]
+          python3 - "$IMAGE_ID" "$BUILD_MANIFEST" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+
+          image_id, manifest_path = sys.argv[1:]
+          root = Path.cwd().resolve()
+          manifest = json.loads(Path(manifest_path).read_text())
+          if manifest.get("schemaVersion") != "1.0.0":
+              raise SystemExit("unsupported image build manifest")
+          if manifest.get("imageId") != image_id:
+              raise SystemExit("image build manifest identity mismatch")
+          if manifest.get("productionActivation") is not False:
+              raise SystemExit("image build manifest may not activate production")
+          if not re.fullmatch(r"[A-Za-z0-9.-]+", str(manifest.get("license", ""))):
+              raise SystemExit("image build manifest requires an SPDX license expression")
+          description = manifest.get("description", "")
+          if not isinstance(description, str) or not (1 <= len(description) <= 160) or "\n" in description:
+              raise SystemExit("image description must be one bounded line")
+          paths = {name: manifest.get(name, "") for name in ("dockerfile", "context")}
+          for name, value in paths.items():
+              if not re.fullmatch(r"[A-Za-z0-9._/-]+", value) or value.startswith("/") or ".." in value:
+                  raise SystemExit(f"unsafe {name} path")
+              candidate = root / value
+              resolved = candidate.resolve()
+              if root not in (resolved, *resolved.parents):
+                  raise SystemExit(f"{name} escapes workspace")
+              if candidate.is_symlink() or not resolved.exists():
+                  raise SystemExit(f"{name} missing or symbolic")
+          if not (root / paths["dockerfile"]).is_file() or not (root / paths["context"]).is_dir():
+              raise SystemExit("Dockerfile/context type mismatch")
+          if not ((root / paths["context"]) / ".dockerignore").is_file():
+              raise SystemExit("deterministic build context requires .dockerignore")
+          args = manifest.get("buildArgs")
+          if not isinstance(args, dict) or not args:
+              raise SystemExit("at least one digest-pinned build argument is required")
+          image = re.compile(r"[a-z0-9./_-]+@sha256:[0-9a-f]{64}")
+          if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*_IMAGE", key) or not image.fullmatch(value) for key, value in args.items()):
+              raise SystemExit("build arguments must be named immutable image identities")
+          dockerfile = (root / paths["dockerfile"]).read_text()
+          if "latest" in dockerfile.lower():
+              raise SystemExit("Dockerfile contains a mutable latest reference")
+          declared = set(re.findall(r"(?m)^ARG\s+([A-Z][A-Z0-9_]*_IMAGE)(?:=.*)?$", dockerfile))
+          if declared != set(args):
+              raise SystemExit("Dockerfile image ARGs do not equal the build manifest")
+          for source in re.findall(r"(?mi)^FROM\s+([^\s]+)", dockerfile):
+              match = re.fullmatch(r"\$\{([A-Z][A-Z0-9_]*_IMAGE)\}", source)
+              if match and match.group(1) in args:
+                  continue
+              if not image.fullmatch(source):
+                  raise SystemExit(f"uncontrolled Dockerfile base image: {source}")
+          PY
+      - name: Install checksum-verified inventory and scan tools
+        run: |
+          set -Eeuo pipefail
+          install_tool() {
+            url="$1" expected="$2" binary="$3"
+            archive="${RUNNER_TEMP}/$(basename "$url")"
+            curl --fail --silent --show-error --location "$url" --output "$archive"
+            echo "$expected  $archive" | sha256sum --check -
+            tar -xzf "$archive" -C "$RUNNER_TEMP" "$binary"
+            install -m 0755 "${RUNNER_TEMP}/${binary}" "${RUNNER_TEMP}/bin/${binary}"
+          }
+          mkdir -p "${RUNNER_TEMP}/bin"
+          install_tool https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_amd64.tar.gz 8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3 syft
+          install_tool https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a trivy
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        with:
+          cosign-release: v3.1.3
+      - name: Build and scan a non-published exact candidate first
+        env:
+          BUILD_MANIFEST: ${{ inputs.build_manifest_path }}
+          IMAGE_ID: ${{ inputs.image_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+        run: |
+          set -Eeuo pipefail
+          dockerfile="$(jq -r '.dockerfile' "$BUILD_MANIFEST")"
+          context="$(jq -r '.context' "$BUILD_MANIFEST")"
+          license="$(jq -r '.license' "$BUILD_MANIFEST")"
+          description="$(jq -r '.description' "$BUILD_MANIFEST")"
+          created="$(git show -s --format=%cI "$SOURCE_SHA")"
+          mapfile -t argument_names < <(jq -r '.buildArgs | keys[]' "$BUILD_MANIFEST")
+          build_args=()
+          for name in "${argument_names[@]}"; do
+            value="$(jq -r --arg name "$name" '.buildArgs[$name]' "$BUILD_MANIFEST")"
+            build_args+=(--build-arg "${name}=${value}")
+          done
+          docker buildx build --load --platform linux/amd64 --file "$dockerfile" "${build_args[@]}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --label "org.opencontainers.image.version=${RELEASE_TAG}" \
+            --label "org.opencontainers.image.title=${IMAGE_ID}" \
+            --label "org.opencontainers.image.description=${description}" \
+            --label "org.opencontainers.image.created=${created}" \
+            --label "org.opencontainers.image.licenses=${license}" \
+            --tag "local/codestra-${IMAGE_ID}:${SOURCE_SHA}" "$context"
+          trivy image --exit-code 1 --severity HIGH,CRITICAL "local/codestra-${IMAGE_ID}:${SOURCE_SHA}"
+      - name: Authenticate and reject release-label reuse
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_ID: ${{ inputs.image_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repository_name,,}-${IMAGE_ID}"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if docker buildx imagetools inspect "${registry}:${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "release tag already exists and may not be reassigned" >&2
+            exit 1
+          fi
+          echo "registry=${registry}" >> "$GITHUB_OUTPUT"
+      - name: Build exact protected source with provenance and SBOM
+        id: build
+        env:
+          BUILD_MANIFEST: ${{ inputs.build_manifest_path }}
+          IMAGE_ID: ${{ inputs.image_id }}
+          REGISTRY: ${{ steps.target.outputs.registry }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist
+          dockerfile="$(jq -r '.dockerfile' "$BUILD_MANIFEST")"
+          context="$(jq -r '.context' "$BUILD_MANIFEST")"
+          license="$(jq -r '.license' "$BUILD_MANIFEST")"
+          description="$(jq -r '.description' "$BUILD_MANIFEST")"
+          created="$(git show -s --format=%cI "$SOURCE_SHA")"
+          mapfile -t argument_names < <(jq -r '.buildArgs | keys[]' "$BUILD_MANIFEST")
+          build_args=()
+          for name in "${argument_names[@]}"; do
+            value="$(jq -r --arg name "$name" '.buildArgs[$name]' "$BUILD_MANIFEST")"
+            build_args+=(--build-arg "${name}=${value}")
+          done
+          docker buildx build \
+            --platform linux/amd64 \
+            --file "$dockerfile" \
+            "${build_args[@]}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --label "org.opencontainers.image.version=${RELEASE_TAG}" \
+            --label "org.opencontainers.image.title=${IMAGE_ID}" \
+            --label "org.opencontainers.image.description=${description}" \
+            --label "org.opencontainers.image.created=${created}" \
+            --label "org.opencontainers.image.licenses=${license}" \
+            --provenance=mode=max \
+            --sbom=true \
+            --tag "${REGISTRY}:${RELEASE_TAG}" \
+            --metadata-file dist/build-metadata.json \
+            --push "$context"
+          digest="$(jq -r '."containerimage.digest"' dist/build-metadata.json)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "identity=${REGISTRY}@${digest}" >> "$GITHUB_OUTPUT"
+      - name: Pull, inspect, inventory and scan exact digest
+        env:
+          IDENTITY: ${{ steps.build.outputs.identity }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+          IMAGE_ID: ${{ inputs.image_id }}
+        run: |
+          docker pull "$IDENTITY"
+          revision="$(docker image inspect "$IDENTITY" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+          test "$revision" = "$SOURCE_SHA"
+          syft "$IDENTITY" -o "spdx-json=dist/${IMAGE_ID}.spdx.json"
+          trivy image --exit-code 1 --severity HIGH,CRITICAL "$IDENTITY"
+      - name: Sign and verify image and SBOM attestation
+        env:
+          IDENTITY: ${{ steps.build.outputs.identity }}
+          CALLING_WORKFLOW_PATH: ${{ inputs.calling_workflow_path }}
+          IMAGE_ID: ${{ inputs.image_id }}
+        run: |
+          cosign sign --yes "$IDENTITY"
+          cosign attest --yes --type spdxjson --predicate "dist/${IMAGE_ID}.spdx.json" "$IDENTITY"
+          workflow_identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/${CALLING_WORKFLOW_PATH}@refs/heads/production"
+          cosign verify "$IDENTITY" --certificate-identity "$workflow_identity" --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          cosign verify-attestation "$IDENTITY" --type spdxjson --certificate-identity "$workflow_identity" --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-name: ${{ steps.target.outputs.registry }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Verify SLSA provenance and record evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IDENTITY: ${{ steps.build.outputs.identity }}
+          IMAGE_ID: ${{ inputs.image_id }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh attestation verify "oci://${IDENTITY}" --repo "$GITHUB_REPOSITORY"
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg imageId "$IMAGE_ID" --arg sourceSha "$SOURCE_SHA" --arg releaseTag "$RELEASE_TAG" --arg image "$IDENTITY" --arg sbomSha256 "$(sha256sum "dist/${IMAGE_ID}.spdx.json" | cut -d' ' -f1)" \
+            '{schemaVersion:"1.0.0",repository:$repository,imageId:$imageId,sourceSha:$sourceSha,releaseTag:$releaseTag,image:$image,sbomSha256:$sbomSha256,revisionVerified:true,signatureVerified:true,provenanceVerified:true,vulnerabilityGate:"PASS",productionActivated:false}' > dist/release-evidence.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: image-release-evidence-${{ inputs.image_id }}-${{ inputs.protected_source_sha }}
+          path: |
+            dist/${{ inputs.image_id }}.spdx.json
+            dist/build-metadata.json
+            dist/release-evidence.json
+          if-no-files-found: error
+          retention-days: 90
