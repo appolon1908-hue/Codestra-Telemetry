@@ -17,4 +17,17 @@ class ImageReleaseTests(unittest.TestCase):
     def test_revision_label_gate(self) -> None:
         source = self.source.replace("org.opencontainers.image.revision", "removed.revision")
         with self.assertRaisesRegex(ValueError, "revision"): VALIDATOR.validate(source)
+    def test_caller_controlled_signer_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "caller-controlled"):
+            VALIDATOR.validate(self.source + "\ncalling_workflow_path: unsafe.yml\n")
+    def test_release_label_must_follow_evidence_upload(self) -> None:
+        source = self.source.replace(
+            "Publish immutable release label after every gate passes",
+            "removed release publication step",
+        )
+        with self.assertRaisesRegex(ValueError, "release label"):
+            VALIDATOR.validate(source)
+    def test_early_release_tag_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "before gates"):
+            VALIDATOR.validate(self.source + '\n--tag "${REGISTRY}:${RELEASE_TAG}"\n')
 if __name__ == "__main__": unittest.main()
