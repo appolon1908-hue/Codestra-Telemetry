@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md
+      - docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md
       - .github/workflows/validate-production-server-api-contract.yml
   push:
     branches: [development, test, staging, production, main]
     paths:
       - docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md
+      - docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md
       - .github/workflows/validate-production-server-api-contract.yml
 
 permissions:
@@ -27,12 +29,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Validate source-only production contract
+      - name: Validate source-only production contract and server handoff
         run: |
           python - <<'PY'
           from pathlib import Path
-          text = Path('docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md').read_text(encoding='utf-8')
-          required = [
+
+          contract = Path('docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md').read_text(encoding='utf-8')
+          contract_required = [
               'appolon1908-hue/Codestra-Telemetry', '37.27.128.39',
               'SOURCE_CONTRACT_PREPARED_NOT_DEPLOYED', 'OTLP/gRPC', ':4317',
               'POST /v1/traces', 'POST /v1/metrics', 'POST /v1/logs',
@@ -40,10 +43,45 @@ jobs:
               'UNEXPECTED_404=0', 'SOURCE_RUNTIME_DRIFT=0',
               'This document does not deploy a collector',
           ]
-          missing = [value for value in required if value not in text]
+          missing = [value for value in contract_required if value not in contract]
           assert not missing, f'missing production API contract controls: {missing}'
-          forbidden = ['ADMIN_BYPASS_AUTHORIZED=YES', 'SSH_CONFIGURATION_CHANGES_AUTHORIZED=YES', ':latest']
-          present = [value for value in forbidden if value in text]
+
+          handoff = Path('docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md').read_text(encoding='utf-8')
+          handoff_required = [
+              'CENTRAL_STACK_INSTALL_HOST=37.27.128.39',
+              'CORE_APPLICATION_HOST=65.109.65.169',
+              'CENTRAL_AUTHORITY_ON_CORE_HOST=NO',
+              'SSH_CONFIGURATION_CHANGES_AUTHORIZED=NO',
+              'ADMIN_BYPASS_AUTHORIZED=NO',
+              'appolon1908-hue/Codestra-Loki',
+              'appolon1908-hue/Codestra-Prometheus',
+              'appolon1908-hue/Codestra-Grafana-',
+              'appolon1908-hue/Codestra-Tempo',
+              'appolon1908-hue/Codestra-Telemetry',
+              'appolon1908-hue/Codestra-Alloy',
+              'appolon1908-hue/Codestra-Node-Exporter',
+              'appolon1908-hue/Codestra-cAdvisor',
+              'appolon1908-hue/Codestra-Redis-Exporter',
+              'appolon1908-hue/Codestra-Blackbox-Exporter',
+              'appolon1908-hue/Superset',
+              'appolon1908-hue/Codestra-OpenBao',
+              'EXACT_HEAD_CI=PASS',
+              'SERVER_INSTALL_AUTHORIZED=YES',
+              'CVE-2026-84304',
+              'GRPC_GO_VERSION>=1.83.1',
+              'Never patch production in place and leave GitHub behind',
+          ]
+          missing = [value for value in handoff_required if value not in handoff]
+          assert not missing, f'missing cross-suite handoff controls: {missing}'
+          assert handoff.count('appolon1908-hue/') == 12, 'handoff must list exactly twelve product repositories'
+
+          forbidden = [
+              'ADMIN_BYPASS_AUTHORIZED=YES',
+              'SSH_CONFIGURATION_CHANGES_AUTHORIZED=YES',
+              ':latest',
+              'OPENBAO_PRODUCTION_DEPLOYMENT=YES',
+          ]
+          present = [value for value in forbidden if value in contract or value in handoff]
           assert not present, f'forbidden production contract claims: {present}'
-          print('CODESTRA_TELEMETRY_PRODUCTION_API_CONTRACT=PASS')
+          print('CODESTRA_TELEMETRY_PRODUCTION_API_AND_HANDOFF_CONTRACT=PASS')
           PY
