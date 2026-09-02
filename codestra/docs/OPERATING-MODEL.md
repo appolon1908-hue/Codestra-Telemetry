@@ -6,7 +6,7 @@ The Collector owns telemetry ingress, business identity enforcement, normalizati
 
 ## Deployment unit
 
-One Collector instance is deployed for one approved Codestra business, environment, region and server boundary. Its deployment inputs establish the trusted business identity. Workloads may identify their application, service, version and deployment, but they cannot select a different business tenant.
+The deployment candidate in this repository is the platform Collector. Its business identity is fixed as `platform` in reviewed Compose source; neither a caller nor an environment file can select a different tenant. Workloads may identify their application, service, version and deployment, but they cannot select a different business tenant. A future business-specific instance requires its own reviewed source authority, release evidence and isolated queue volume.
 
 The instance connects to:
 
@@ -52,7 +52,7 @@ Release evidence must include representative fixtures proving removal of authori
 
 ## Storage and recovery
 
-The writable Collector volume contains only file-backed exporter queue state. Its external volume name is derived from the approved `CODESTRA_BUSINESS` value, preventing Compose project reuse from carrying queued data into another business boundary. It is not long-term telemetry storage. Staging must prove:
+The writable Collector volume contains only file-backed exporter queue state. Its external volume name is fixed as `codestra-platform-otelcol-storage`, preventing a deployment input from redirecting the platform Collector to another business queue. It is not long-term telemetry storage. Staging must prove:
 
 - restart recovery of queued traces and logs;
 - bounded disk growth during backend unavailability;

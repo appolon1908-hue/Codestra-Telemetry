@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "imageId": "opentelemetry",
+  "dockerfile": "codestra/deploy/Dockerfile",
+  "context": ".",
+  "buildArgs": {
+    "GO_BUILDER_IMAGE": "docker.io/library/golang@sha256:e8c859f5632dcfde7b32d2012b4351728f6437930887c2f6a91ea242459e5514",
+    "OTELCOL_BASE_IMAGE": "docker.io/otel/opentelemetry-collector-contrib@sha256:1f2c54a30e713fac6b3ae77a1ec84010c2007e29ced8ec666214fc2f6739c1cc"
+  },
+  "license": "Apache-2.0",
+  "description": "Signed private OpenTelemetry Collector with mTLS ingress, redaction, sampling, and durable queues.",
+  "productionActivation": false
+}

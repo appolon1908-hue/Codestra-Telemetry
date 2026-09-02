@@ -15,10 +15,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CODESTRA = ROOT / "codestra"
 PROFILE = CODESTRA / "enterprise-profile.v1.json"
 COLLECTOR = CODESTRA / "collector.yaml"
-COMPOSE = CODESTRA / "compose.yaml"
+COMPOSE = CODESTRA / "compose.candidate.yaml"
 DOCKERFILE = CODESTRA / "deploy" / "Dockerfile"
 HEALTHCHECK = CODESTRA / "deploy" / "healthcheck.go"
-ENV_EXAMPLE = CODESTRA / ".env.example"
+ENV_EXAMPLE = CODESTRA / "runtime.env.example"
 FEATURES_DOC = CODESTRA / "docs" / "CORPORATE-FEATURES.md"
 OPERATING_DOC = CODESTRA / "docs" / "OPERATING-MODEL.md"
 
@@ -338,6 +338,10 @@ def validate_runtime() -> None:
         fail("Compose candidate must define otel-collector")
     if service.get("user") != "10001:10001":
         fail("Collector must run as UID/GID 10001")
+    if service.get("profiles") != ["candidate-after-approval"]:
+        fail("Collector candidate must remain inactive by default")
+    if service.get("pull_policy") != "never" or service.get("restart") != "no":
+        fail("Collector candidate must be deploy-only and non-activating")
     if service.get("read_only") is not True:
         fail("Collector root filesystem must be read-only")
     if service.get("privileged") is True or service.get("network_mode") == "host":
@@ -370,17 +374,25 @@ def validate_runtime() -> None:
     if storage.get("external") is not True:
         fail("Collector durable queue volume must be externally lifecycle-managed")
     storage_name = str(storage.get("name", ""))
-    if "${CODESTRA_BUSINESS:" not in storage_name or not storage_name.endswith("-otelcol-storage"):
-        fail("Collector durable queue volume must be scoped by the approved business identity")
+    if storage_name != "codestra-platform-otelcol-storage":
+        fail("Collector durable queue volume must use the repository-controlled platform identity")
     if service.get("healthcheck", {}).get("test") != ["CMD", "/otelcol-healthcheck"]:
         fail("Collector must use the native health probe")
 
     image = str(service.get("image", ""))
-    if "${CODESTRA_OTELCOL_IMAGE:" not in image or "sha256" not in image:
+    if image != "${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}":
         fail("Collector final image must require an immutable digest")
-    build_args = service.get("build", {}).get("args", {})
-    if set(build_args) != {"GO_BUILDER_IMAGE", "OTELCOL_BASE_IMAGE"}:
-        fail("Collector build must pin builder and upstream images")
+    if "build" in service:
+        fail("Collector production candidate may not build on a target host")
+    environment = service.get("environment", {})
+    if environment.get("CODESTRA_BUSINESS") != "platform":
+        fail("Collector business identity must be repository-controlled")
+    for key in ("CODESTRA_SOURCE_SHA", "CODESTRA_IMAGE_DIGEST"):
+        if key not in environment:
+            fail(f"Collector runtime identity is missing {key}")
+    labels = service.get("labels", {})
+    if labels.get("codestra.business") != "platform":
+        fail("Collector Compose label business identity must be repository-controlled")
     limits = service.get("deploy", {}).get("resources", {}).get("limits", {})
     for field in ("cpus", "memory", "pids"):
         if field not in limits:
@@ -410,11 +422,23 @@ def validate_runtime() -> None:
     ):
         if fragment not in dockerfile:
             fail(f"Collector Dockerfile is missing {fragment}")
+    top_secrets = compose.get("secrets", {})
+    if set(top_secrets) != {
+        "otelcol_server_cert",
+        "otelcol_server_key",
+        "otelcol_client_ca",
+        "otelcol_backend_ca",
+    }:
+        fail("Collector top-level secret-file authority mismatch")
+    if any(set(value) != {"file"} for value in top_secrets.values()):
+        fail("Collector secrets must be sourced only from mounted files")
     healthcheck = require_file(HEALTHCHECK)
     if "http://127.0.0.1:13133/" not in healthcheck:
         fail("Collector health probe must use the local health extension")
     if "os/exec" in healthcheck or "exec.Command" in healthcheck:
         fail("Collector health probe may not invoke a shell or subprocess")
+    if "Getenv" in healthcheck:
+        fail("Collector health probe destination must not be runtime-controlled")
 
 
 def validate_docs_and_source_safety() -> None:
@@ -424,17 +448,14 @@ def validate_docs_and_source_safety() -> None:
 
     env_text = ENV_EXAMPLE.read_text(encoding="utf-8")
     for required in (
-        "CODESTRA_BUSINESS=platform",
-        "CODESTRA_BUSINESS_TELEMETRY_NETWORK=",
-        "GO_BUILDER_IMAGE=",
-        "OTELCOL_BASE_IMAGE=",
-        "CODESTRA_OTELCOL_IMAGE=",
-        "OTELCOL_SERVER_CERT_SECRET_NAME=",
-        "OTELCOL_SERVER_KEY_SECRET_NAME=",
-        "OTELCOL_CLIENT_CA_SECRET_NAME=",
-        "OTELCOL_BACKEND_CA_SECRET_NAME=",
-        "TEMPO_TLS_SERVER_NAME=",
-        "LOKI_TLS_SERVER_NAME=",
+        "CODESTRA_OTELCOL_IMAGE=ghcr.io/appolon1908-hue/codestra-telemetry-opentelemetry@sha256:<64-lowercase-hex>",
+        "CODESTRA_SOURCE_SHA=<40-lowercase-hex>",
+        "CODESTRA_IMAGE_DIGEST=sha256:<64-lowercase-hex>",
+        "CODESTRA_BUSINESS_TELEMETRY_NETWORK=codestra-telemetry-platform",
+        "OTELCOL_SERVER_CERT_FILE_SOURCE=/run/secrets/codestra/opentelemetry/server-certificate",
+        "OTELCOL_SERVER_KEY_FILE_SOURCE=/run/secrets/codestra/opentelemetry/server-private-key",
+        "OTELCOL_CLIENT_CA_FILE_SOURCE=/run/secrets/codestra/opentelemetry/client-ca",
+        "OTELCOL_BACKEND_CA_FILE_SOURCE=/run/secrets/codestra/opentelemetry/backend-ca",
     ):
         if required not in env_text:
             fail(f"runtime example omits {required}")
