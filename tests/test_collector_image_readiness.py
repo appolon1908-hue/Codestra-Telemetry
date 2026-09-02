@@ -28,12 +28,15 @@ class CollectorRuntimeIdentityTest(unittest.TestCase):
         }
 
     def test_accepts_aligned_immutable_identity(self) -> None:
-        inspection = mock.Mock(returncode=0, stdout="0" * 40 + "\n")
+        revision = mock.Mock(returncode=0, stdout="0" * 40 + "\n")
+        embedded = mock.Mock(
+            returncode=0, stdout="CODESTRA_IMAGE_SOURCE_SHA=" + "0" * 40 + "\n"
+        )
         with mock.patch.dict(os.environ, self.values(), clear=True), mock.patch.object(
-            RUNTIME_IDENTITY.subprocess, "run", return_value=inspection
+            RUNTIME_IDENTITY.subprocess, "run", side_effect=[revision, embedded]
         ) as run:
             RUNTIME_IDENTITY.main()
-        run.assert_called_once()
+        self.assertEqual(run.call_count, 2)
 
     def test_rejects_digest_mismatch(self) -> None:
         values = self.values()
@@ -54,6 +57,19 @@ class CollectorRuntimeIdentityTest(unittest.TestCase):
         values = self.values()
         values["CODESTRA_OTELCOL_IMAGE"] = "opentelemetry:latest"
         with mock.patch.dict(os.environ, values, clear=True):
+            with self.assertRaises(SystemExit):
+                RUNTIME_IDENTITY.main()
+
+    def test_rejects_embedded_source_mismatch(self) -> None:
+        revision = mock.Mock(returncode=0, stdout="0" * 40 + "\n")
+        embedded = mock.Mock(
+            returncode=0, stdout="CODESTRA_IMAGE_SOURCE_SHA=" + "1" * 40 + "\n"
+        )
+        with mock.patch.dict(os.environ, self.values(), clear=True), mock.patch.object(
+            RUNTIME_IDENTITY.subprocess,
+            "run",
+            side_effect=[revision, embedded],
+        ):
             with self.assertRaises(SystemExit):
                 RUNTIME_IDENTITY.main()
 

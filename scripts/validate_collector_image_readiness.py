@@ -56,6 +56,7 @@ def main() -> None:
     lock = load("codestra/release/runtime-base.lock.json")
     if (
         manifest.get("imageId") != "opentelemetry"
+        or manifest.get("embedSourceRevision") is not True
         or manifest.get("dockerfile") != "codestra/deploy/Dockerfile"
         or manifest.get("context") != "."
         or manifest.get("productionActivation") is not False
@@ -97,6 +98,8 @@ def main() -> None:
     for token in (
         "FROM ${GO_BUILDER_IMAGE} AS healthcheck-builder",
         "FROM ${OTELCOL_BASE_IMAGE}",
+        "ARG CODESTRA_SOURCE_SHA",
+        "ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}",
         "-buildvcs=false",
         "-buildid=",
         "/otelcol-healthcheck",
@@ -163,6 +166,8 @@ def main() -> None:
         '"inspect",',
         "org.opencontainers.image.revision",
         "image_revision != source_sha",
+        "CODESTRA_IMAGE_SOURCE_SHA=",
+        "embedded != [f\"CODESTRA_IMAGE_SOURCE_SHA={source_sha}\"]",
         "stderr=subprocess.DEVNULL",
     ):
         if token not in identity_source:
@@ -172,6 +177,12 @@ def main() -> None:
     )
     if '--label "org.opencontainers.image.revision=$source_sha"' not in build_inspection:
         fail("exact local Collector image build must apply the OCI source revision label")
+    for token in (
+        '--build-arg "CODESTRA_SOURCE_SHA=$source_sha"',
+        'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
+    ):
+        if token not in build_inspection:
+            fail(f"exact local Collector image build lacks source embedding: {token}")
 
     release = yaml.safe_load(
         (ROOT / ".github/workflows/release-collector-image.yml").read_text(

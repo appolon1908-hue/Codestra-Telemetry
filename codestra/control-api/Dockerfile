@@ -26,6 +26,8 @@ RUN install -d -m 0555 /out/rootfs/etc/codestra-observability /out/rootfs/usr/sh
     && install -m 0444 ./metadata/runtime-base.lock.json /out/rootfs/usr/share/codestra/runtime-base.lock.json
 
 FROM ${RUNTIME_IMAGE}
+ARG CODESTRA_SOURCE_SHA
+ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}
 LABEL org.opencontainers.image.title="Codestra Observability Control API"
 LABEL org.opencontainers.image.description="Private authenticated read-only control plane for fourteen Codestra observability authorities"
 LABEL org.opencontainers.image.vendor="Codestra"

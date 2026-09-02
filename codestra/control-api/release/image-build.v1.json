@@ -1,6 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "imageId": "control-api",
+  "embedSourceRevision": true,
   "dockerfile": "codestra/control-api/Dockerfile",
   "context": "codestra/control-api",
   "buildArgs": {
