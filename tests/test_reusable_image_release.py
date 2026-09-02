@@ -30,4 +30,18 @@ class ImageReleaseTests(unittest.TestCase):
     def test_early_release_tag_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "before gates"):
             VALIDATOR.validate(self.source + '\n--tag "${REGISTRY}:${RELEASE_TAG}"\n')
+    def test_frontend_digest_gate_is_present(self) -> None:
+        source = self.source.replace(
+            "Dockerfile frontend must be pinned by exact sha256 digest",
+            "frontend gate removed",
+        )
+        with self.assertRaisesRegex(ValueError, "frontend"):
+            VALIDATOR.validate(source)
+    def test_external_copy_gate_is_present(self) -> None:
+        source = self.source.replace(
+            "uncontrolled external COPY source",
+            "external copy gate removed",
+        )
+        with self.assertRaisesRegex(ValueError, "COPY"):
+            VALIDATOR.validate(source)
 if __name__ == "__main__": unittest.main()

@@ -19,6 +19,9 @@ REQUIRED = (
     "concurrency:", "cancel-in-progress: false",
     "Publish immutable release label after every gate passes",
     'gitleaks dir --no-banner --redact=100 --exit-code 1 "$context"',
+    "Dockerfile frontend must be pinned by exact sha256 digest",
+    "uncontrolled external COPY source",
+    "duplicate JSON key in image build manifest",
 )
 def validate(source: str) -> None:
     for token in REQUIRED:
