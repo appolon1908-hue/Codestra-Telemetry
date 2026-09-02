@@ -89,6 +89,9 @@ def main() -> int:
         actual = {item.get("id"): item.get("repository") for item in services}
         if actual != EXPECTED:
             fail(f"registry service/repository map differs from authority catalogue: {actual}")
+        postgres_exporter = next(item for item in services if item.get("id") == "postgres-exporter")
+        if postgres_exporter.get("canonicalHostname") != "postgres-exporter":
+            fail("PostgreSQL Exporter must use its private service identity, not a public hostname")
 
         schema_ref = registry.get("contractSchema", {})
         if schema_ref.get("repository") != "appolon1908-hue/Codestra-Telemetry":
