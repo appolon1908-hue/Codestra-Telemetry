@@ -10,7 +10,7 @@ on:
       - '.github/workflows/validate-codestra-control-api.yml'
       - '.github/workflows/validate-codestra-service-contract.yml'
   push:
-    branches: [development, test, staging, production, main]
+    branches: [development, test, staging, production, main, 'feature/**']
     paths:
       - 'codestra/api/**'
       - 'codestra/control-api/**'
