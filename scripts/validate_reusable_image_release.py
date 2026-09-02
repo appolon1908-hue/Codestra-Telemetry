@@ -24,7 +24,9 @@ REQUIRED = (
     "duplicate JSON key in image build manifest",
     "embedSourceRevision must be a boolean",
     "source-embedding image must declare ARG CODESTRA_SOURCE_SHA",
+    "source-embedding image must persist CODESTRA_IMAGE_SOURCE_SHA",
     'build_args+=(--build-arg "CODESTRA_SOURCE_SHA=${SOURCE_SHA}")',
+    'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=${SOURCE_SHA}"',
 )
 def validate(source: str) -> None:
     for token in REQUIRED:

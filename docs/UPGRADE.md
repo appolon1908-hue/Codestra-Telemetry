@@ -9,6 +9,8 @@ Release each workload only from an exact protected production commit through the
 The reusable Model A workflow always supplies `CODESTRA_SOURCE_SHA` from its
 validated protected-production input. An image manifest may set
 `embedSourceRevision: true`; that makes a matching Dockerfile
-`ARG CODESTRA_SOURCE_SHA` mandatory so the image can enforce its signed source
-identity before application startup. The value is derived by the release
+`ARG CODESTRA_SOURCE_SHA` and
+`ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}` mandatory. The release
+workflow inspects that exact value in both the unpublished candidate and the
+pulled published digest before signing. The value is derived by the release
 workflow and must never be caller-authored in a build manifest.
