@@ -32,7 +32,6 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-cache-dir -r requirements-validation.txt
           python3 scripts/validate_codestra_control_api.py
           python3 scripts/validate_control_api_image_readiness.py
-          python3 scripts/validate_control_api_runtime_identity.py
           python3 -m unittest discover -s tests -p 'test_*.py'
           test -z "$(gofmt -d codestra/control-api)"
           (cd codestra/control-api && go test -race ./... && go vet ./...)

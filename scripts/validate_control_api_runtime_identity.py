@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 
 IMAGE = re.compile(
     r"^ghcr\.io/appolon1908-hue/codestra-telemetry-control-api@sha256:([0-9a-f]{64})$"
@@ -28,6 +29,26 @@ def main() -> None:
         fail("source SHA must be 40 lowercase hexadecimal characters")
     if not digest_match or digest_match.group(1) != image_match.group(1):
         fail("image digest read-back must equal the image reference digest")
+    result = subprocess.run(
+        [
+            "docker",
+            "image",
+            "inspect",
+            image,
+            "--format",
+            '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=15,
+    )
+    image_revision = result.stdout.strip()
+    if result.returncode != 0 or not SHA.fullmatch(image_revision):
+        fail("exact pulled image has no valid OCI source revision read-back")
+    if image_revision != source_sha:
+        fail("source SHA differs from exact pulled image OCI revision")
     print("CONTROL_API_RUNTIME_IDENTITY=PASS")
 
 

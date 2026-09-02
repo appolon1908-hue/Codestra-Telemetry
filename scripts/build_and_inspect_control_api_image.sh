@@ -14,12 +14,14 @@ docker build \
   --file codestra/control-api/Dockerfile \
   --build-arg "GO_BUILDER_IMAGE=$builder" \
   --build-arg "RUNTIME_IMAGE=$runtime" \
+  --label "org.opencontainers.image.revision=$source_sha" \
   --tag "$tag" \
   codestra/control-api
 
 test "$(docker run --rm "$tag" --version)" = "codestra-observability-api repository-source"
 docker image inspect "$tag" | jq -e \
   '.[0].Config.User == "65532:65532" and .[0].Config.Entrypoint == ["/usr/local/bin/codestra-observability-api"]'
+test "$(docker image inspect "$tag" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$source_sha"
 
 container_id=""
 cleanup() {

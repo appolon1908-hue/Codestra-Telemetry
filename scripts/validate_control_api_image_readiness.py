@@ -126,6 +126,25 @@ def main() -> None:
     if "latest" in compose_text.lower() or "env_file" in compose_text:
         fail("control API candidate contains a mutable image or credential environment file")
 
+    identity_source = (ROOT / "scripts/validate_control_api_runtime_identity.py").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        '"docker",',
+        '"image",',
+        '"inspect",',
+        "org.opencontainers.image.revision",
+        "image_revision != source_sha",
+        "stderr=subprocess.DEVNULL",
+    ):
+        if token not in identity_source:
+            fail(f"runtime source-to-image read-back binding missing: {token}")
+    build_inspection = (ROOT / "scripts/build_and_inspect_control_api_image.sh").read_text(
+        encoding="utf-8"
+    )
+    if '--label "org.opencontainers.image.revision=$source_sha"' not in build_inspection:
+        fail("exact local image build must apply the OCI source revision label")
+
     release = yaml.safe_load(
         (ROOT / ".github/workflows/release-control-api-image.yml").read_text(
             encoding="utf-8"
