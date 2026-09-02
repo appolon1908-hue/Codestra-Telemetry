@@ -16,6 +16,7 @@ OPENAPI_PATH = CONTROL / "openapi.json"
 DOCKERFILE_PATH = CONTROL / "Dockerfile"
 SERVICE_CONTRACT_PATH = ROOT / "codestra" / "api" / "service-contract.v1.json"
 SCHEMA_PATH = ROOT / "codestra" / "api" / "service-contract.schema.json"
+REUSABLE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "reusable-validate-service-contract.yml"
 
 EXPECTED = {
     "prometheus": "appolon1908-hue/Codestra-Prometheus",
@@ -67,6 +68,16 @@ def main() -> int:
         openapi = load(OPENAPI_PATH)
         load(SCHEMA_PATH)
         service_contract = load(SERVICE_CONTRACT_PATH)
+        reusable_workflow = REUSABLE_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+        reusable_required_fragments = (
+            "schema_authority_revision:",
+            "EXPECTED_SCHEMA_AUTHORITY_REVISION: ${{ inputs.schema_authority_revision }}",
+            "assert re.fullmatch(r'[0-9a-f]{40}', schema_authority_revision)",
+            "'sourceRevision': schema_authority_revision",
+        )
+        if any(fragment not in reusable_workflow for fragment in reusable_required_fragments):
+            fail("reusable workflow does not validate a caller-pinned merged schema authority")
 
         if registry.get("schemaVersion") != "1.0.0":
             fail("registry schemaVersion must be 1.0.0")

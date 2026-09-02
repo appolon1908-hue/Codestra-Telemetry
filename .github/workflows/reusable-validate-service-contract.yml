@@ -15,6 +15,10 @@ on:
         description: Canonical V1 contract ID
         required: true
         type: string
+      schema_authority_revision:
+        description: Exact merged Telemetry commit containing the schema and this reusable workflow
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -40,6 +44,7 @@ jobs:
           EXPECTED_REPOSITORY: ${{ inputs.expected_repository }}
           EXPECTED_COMPONENT: ${{ inputs.expected_component }}
           EXPECTED_CONTRACT_ID: ${{ inputs.expected_contract_id }}
+          EXPECTED_SCHEMA_AUTHORITY_REVISION: ${{ inputs.schema_authority_revision }}
         run: |
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           python - <<'PY'
@@ -53,10 +58,12 @@ jobs:
           assert contract['component'] == os.environ['EXPECTED_COMPONENT']
           assert contract['contractId'] == os.environ['EXPECTED_CONTRACT_ID']
           assert contract['repository'] == os.environ['EXPECTED_REPOSITORY']
+          schema_authority_revision = os.environ['EXPECTED_SCHEMA_AUTHORITY_REVISION']
+          assert re.fullmatch(r'[0-9a-f]{40}', schema_authority_revision)
           assert contract['schemaAuthority'] == {
               'repository': 'appolon1908-hue/Codestra-Telemetry',
               'path': 'codestra/api/service-contract.schema.json',
-              'sourceRevision': 'ed89242841ccab5b0ee0304da7ba21ba70cafc06',
+              'sourceRevision': schema_authority_revision,
               'version': '1.0.0',
           }
           assert contract['deploymentClass'] in {'central', 'agent'}

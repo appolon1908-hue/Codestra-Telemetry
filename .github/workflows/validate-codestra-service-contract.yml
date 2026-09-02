@@ -5,12 +5,14 @@ on:
     paths:
       - 'codestra/api/service-contract.v1.json'
       - 'docs/CODESTRA-SERVICE-API.md'
+      - '.github/workflows/reusable-validate-service-contract.yml'
       - '.github/workflows/validate-codestra-service-contract.yml'
   push:
     branches: [development, test, staging, production, main, 'feature/**']
     paths:
       - 'codestra/api/service-contract.v1.json'
       - 'docs/CODESTRA-SERVICE-API.md'
+      - '.github/workflows/reusable-validate-service-contract.yml'
       - '.github/workflows/validate-codestra-service-contract.yml'
 
 permissions:
