@@ -39,7 +39,9 @@ The API:
 
 ## Build
 
-The Dockerfile intentionally has no mutable image defaults. Both `GO_BUILDER_IMAGE` and `RUNTIME_IMAGE` must be supplied as reviewed `name@sha256:<digest>` references by the release workflow. This branch contains source only and does not build, publish, deploy, expose, or activate the API.
+The Dockerfile intentionally has no mutable image defaults. Both `GO_BUILDER_IMAGE` and `RUNTIME_IMAGE` are locked as reviewed `name@sha256:<digest>` references in `release/image-build.v1.json`. The reusable release workflow can build, scan, attest, and sign only an exact protected `production` commit. The repository candidate remains disabled behind the `candidate-after-approval` profile and does not publish a host port.
+
+`compose.candidate.yaml` is deploy-only: it cannot build an image, requires exact source and digest read-back values, mounts the bearer token from a file, drops all capabilities, and joins only the pre-existing private observability network. Repository readiness does not authorize release, promotion, routing, secrets delivery, or deployment.
 
 Local validation:
 

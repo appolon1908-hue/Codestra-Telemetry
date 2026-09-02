@@ -1,0 +1,40 @@
+name: Validate protected control API image readiness
+
+on:
+  push:
+    branches: [development, test, staging, production, main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-protected:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CODESTRA_CONTROL_API_IMAGE: ghcr.io/appolon1908-hue/codestra-telemetry-control-api@sha256:2222222222222222222222222222222222222222222222222222222222222222
+      CODESTRA_SOURCE_SHA: "0000000000000000000000000000000000000000"
+      CODESTRA_IMAGE_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.23.x"
+          cache: false
+      - run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -m pip install --disable-pip-version-check --no-cache-dir -r requirements-validation.txt
+          python3 scripts/validate_codestra_control_api.py
+          python3 scripts/validate_control_api_image_readiness.py
+          python3 scripts/validate_control_api_runtime_identity.py
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          test -z "$(gofmt -d codestra/control-api)"
+          (cd codestra/control-api && go test -race ./... && go vet ./...)
+      - name: Build and inspect exact protected control API image
+        run: bash scripts/build_and_inspect_control_api_image.sh "$GITHUB_SHA"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +18,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println("codestra-observability-api repository-source")
+		return
+	}
 	logger := log.New(os.Stdout, "", 0)
 	registryPath := envOrDefault("CODESTRA_CONTROL_API_REGISTRY_FILE", "config/services.json")
 	openAPIPath := envOrDefault("CODESTRA_CONTROL_API_OPENAPI_FILE", "openapi.json")
