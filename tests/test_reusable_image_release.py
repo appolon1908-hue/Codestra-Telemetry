@@ -44,4 +44,11 @@ class ImageReleaseTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "COPY"):
             VALIDATOR.validate(source)
+    def test_embedded_source_argument_cannot_be_removed(self) -> None:
+        source = self.source.replace(
+            'build_args+=(--build-arg "CODESTRA_SOURCE_SHA=${SOURCE_SHA}")',
+            "source argument removed",
+        )
+        with self.assertRaisesRegex(ValueError, "CODESTRA_SOURCE_SHA"):
+            VALIDATOR.validate(source)
 if __name__ == "__main__": unittest.main()

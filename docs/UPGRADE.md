@@ -5,3 +5,10 @@ Update the control API source, digest-pinned Go builder, runtime image, runtime 
 Update the Collector configuration, health probe, digest-pinned builder and upstream Collector image, runtime lock, and deterministic build manifest together on a feature branch. Exact-head CI must run the native configuration validator and rebuild and inspect the locked image. Do not move the repository-controlled `platform` identity into a runtime input.
 
 Release each workload only from an exact protected production commit through the reusable signed-image authority. Promote the same immutable digest through test, staging, production, and main; repository readiness alone does not authorize activation.
+
+The reusable Model A workflow always supplies `CODESTRA_SOURCE_SHA` from its
+validated protected-production input. An image manifest may set
+`embedSourceRevision: true`; that makes a matching Dockerfile
+`ARG CODESTRA_SOURCE_SHA` mandatory so the image can enforce its signed source
+identity before application startup. The value is derived by the release
+workflow and must never be caller-authored in a build manifest.

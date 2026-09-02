@@ -83,6 +83,9 @@ jobs:
               raise SystemExit("image build manifest identity mismatch")
           if manifest.get("productionActivation") is not False:
               raise SystemExit("image build manifest may not activate production")
+          embed_source_revision = manifest.get("embedSourceRevision", False)
+          if not isinstance(embed_source_revision, bool):
+              raise SystemExit("embedSourceRevision must be a boolean")
           if not re.fullmatch(r"[A-Za-z0-9.-]+", str(manifest.get("license", ""))):
               raise SystemExit("image build manifest requires an SPDX license expression")
           description = manifest.get("description", "")
@@ -119,6 +122,12 @@ jobs:
           declared = set(re.findall(r"(?m)^ARG\s+([A-Z][A-Z0-9_]*_IMAGE)(?:=.*)?$", dockerfile))
           if declared != set(args):
               raise SystemExit("Dockerfile image ARGs do not equal the build manifest")
+          if embed_source_revision and not re.search(
+              r"(?m)^ARG\s+CODESTRA_SOURCE_SHA(?:=.*)?$", dockerfile
+          ):
+              raise SystemExit(
+                  "source-embedding image must declare ARG CODESTRA_SOURCE_SHA"
+              )
           stages = set()
           from_lines = re.findall(
               r"(?mi)^FROM\s+(?:--platform=[^\s]+\s+)?([^\s]+)(?:\s+AS\s+([A-Za-z0-9._-]+))?",
@@ -187,6 +196,7 @@ jobs:
             value="$(jq -r --arg name "$name" '.buildArgs[$name]' "$BUILD_MANIFEST")"
             build_args+=(--build-arg "${name}=${value}")
           done
+          build_args+=(--build-arg "CODESTRA_SOURCE_SHA=${SOURCE_SHA}")
           docker buildx build --load --platform linux/amd64 --file "$dockerfile" "${build_args[@]}" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
@@ -234,6 +244,7 @@ jobs:
             value="$(jq -r --arg name "$name" '.buildArgs[$name]' "$BUILD_MANIFEST")"
             build_args+=(--build-arg "${name}=${value}")
           done
+          build_args+=(--build-arg "CODESTRA_SOURCE_SHA=${SOURCE_SHA}")
           docker buildx build \
             --platform linux/amd64 \
             --file "$dockerfile" \
