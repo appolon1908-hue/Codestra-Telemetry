@@ -14,7 +14,7 @@ DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 AUTHORITY = (
     "appolon1908-hue/Codestra-Telemetry/.github/workflows/"
-    "reusable-release-image.yml@c327aed6cb43072f5367cd4c52639a901c54e114"
+    "reusable-release-image.yml@5adfee5efbc583b26aaa978e2e4508196d7e0bdc"
 )
 REQUIRED = (
     "REPOSITORY_PROFILE.md",

@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   release:
-    uses: appolon1908-hue/Codestra-Telemetry/.github/workflows/reusable-release-image.yml@37b8648bced4068b4287b39c9ff7a7174f0a9c28
+    uses: appolon1908-hue/Codestra-Telemetry/.github/workflows/reusable-release-image.yml@5adfee5efbc583b26aaa978e2e4508196d7e0bdc
     with:
       image_id: control-api
       release_tag: ${{ inputs.release_tag }}

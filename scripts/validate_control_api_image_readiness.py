@@ -13,7 +13,7 @@ IMAGE = re.compile(r"^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 AUTHORITY = (
     "appolon1908-hue/Codestra-Telemetry/.github/workflows/"
-    "reusable-release-image.yml@37b8648bced4068b4287b39c9ff7a7174f0a9c28"
+    "reusable-release-image.yml@5adfee5efbc583b26aaa978e2e4508196d7e0bdc"
 )
 REQUIRED = (
     "REPOSITORY_PROFILE.md",
