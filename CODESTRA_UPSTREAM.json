@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "component": "opentelemetry-collector",
   "codestra_repository": "appolon1908-hue/Codestra-Telemetry",
   "upstream_repository": "open-telemetry/opentelemetry-collector",
@@ -8,6 +8,6 @@
   "import_path": "upstream",
   "import_mode": "shallow-source-snapshot",
   "preserve_upstream_license": true,
-  "branches": ["main", "staging", "production"],
+  "branches": ["development", "test", "staging", "production", "main"],
   "deployment_enabled": false
 }
