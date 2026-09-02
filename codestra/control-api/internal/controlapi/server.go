@@ -194,15 +194,15 @@ func (server *Server) writeCapabilities(response http.ResponseWriter, request *h
 		"kind":          "ControlPlaneCapabilities",
 		"correlationId": correlationID,
 		"capabilities": map[string]bool{
-			"serviceDiscovery":       true,
-			"aggregateHealth":        true,
-			"readinessReadback":      true,
-			"topologyReadback":       true,
-			"contractDiscovery":      true,
+			"serviceDiscovery":        true,
+			"aggregateHealth":         true,
+			"readinessReadback":       true,
+			"topologyReadback":        true,
+			"contractDiscovery":       true,
 			"releaseIdentityReadback": true,
-			"nativeApiProxy":         false,
-			"mutationProxy":          false,
-			"secretValueReadback":    false,
+			"nativeApiProxy":          false,
+			"mutationProxy":           false,
+			"secretValueReadback":     false,
 		},
 	})
 }
