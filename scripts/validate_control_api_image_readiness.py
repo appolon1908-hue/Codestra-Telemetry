@@ -142,12 +142,18 @@ def main() -> None:
     }:
         fail("control API release workflow inputs mismatch")
 
-    build_call = 'bash scripts/build_and_inspect_control_api_image.sh "$GITHUB_SHA"'
-    for relative in (
-        ".github/workflows/validate-control-api-image-readiness.yml",
-        ".github/workflows/validate-control-api-image-readiness-protected.yml",
-    ):
-        if build_call not in (ROOT / relative).read_text(encoding="utf-8"):
+    build_calls = {
+        ".github/workflows/validate-control-api-image-readiness.yml": (
+            'bash scripts/build_and_inspect_control_api_image.sh "$HEAD_SHA"',
+            'bash scripts/build_and_inspect_control_api_image.sh "$GITHUB_SHA"',
+        ),
+        ".github/workflows/validate-control-api-image-readiness-protected.yml": (
+            'bash scripts/build_and_inspect_control_api_image.sh "$GITHUB_SHA"',
+        ),
+    }
+    for relative, required_calls in build_calls.items():
+        workflow_source = (ROOT / relative).read_text(encoding="utf-8")
+        if any(call not in workflow_source for call in required_calls):
             fail(f"exact control API image build missing: {relative}")
 
     for workflow in (ROOT / ".github/workflows").glob("*.yml"):

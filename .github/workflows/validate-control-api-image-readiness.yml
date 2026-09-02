@@ -52,7 +52,9 @@ jobs:
           "$RUNNER_TEMP/gitleaks" git --no-banner --redact=100 --exit-code 1 --log-opts="${BASE_SHA}..${HEAD_SHA}" .
           "$RUNNER_TEMP/gitleaks" dir --no-banner --redact=100 --exit-code 1 codestra/control-api
       - name: Build and inspect exact locked control API image
-        run: bash scripts/build_and_inspect_control_api_image.sh "$GITHUB_SHA"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/build_and_inspect_control_api_image.sh "$HEAD_SHA"
 
   validate-merge-result:
     runs-on: ubuntu-24.04
