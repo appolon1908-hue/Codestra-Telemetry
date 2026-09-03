@@ -27,7 +27,7 @@
       "sourcePullRequestOutcome": "MERGED",
       "developmentSha": "7200303d8058f2a144c0a0a96a6da01a6d96a04b",
       "developmentRefState": "PRESENT",
-      "successfulProtectedPushRuns": 4
+      "successfulProtectedPushRuns": 3
     },
     {
       "serviceId": "grafana",
