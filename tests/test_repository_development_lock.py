@@ -31,6 +31,31 @@ class RepositoryDevelopmentLockTest(unittest.TestCase):
     def test_accepts_authoritative_snapshot(self) -> None:
         VALIDATOR.validate(self.lock, self.inventory)
 
+    def test_current_refresh_pins_exact_protected_development_heads(self) -> None:
+        locked = {
+            entry["serviceId"]: (
+                entry["developmentSha"],
+                entry["successfulProtectedPushRuns"],
+            )
+            for entry in self.lock["repositories"]
+        }
+        self.assertEqual(
+            locked["opentelemetry"],
+            ("81552819fd16f8275b5711cd882347b605b3f5a3", 5),
+        )
+        self.assertEqual(
+            locked["prometheus"],
+            ("e45cf15cd71e5ade8e11e58771b6c480bb32a003", 2),
+        )
+        self.assertEqual(
+            locked["alloy"],
+            ("f4c4e6b19e6274578a97e1db0ca85e32339a2062", 2),
+        )
+        self.assertEqual(
+            locked["superset"],
+            ("d656a0eac2f8c335519e2ed3da2bd19046a54fbe", 6),
+        )
+
     def test_rejects_activation(self) -> None:
         lock = copy.deepcopy(self.lock)
         lock["productionActivation"] = True
