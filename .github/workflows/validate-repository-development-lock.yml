@@ -5,6 +5,7 @@ on:
     paths:
       - "REPOSITORY_DEVELOPMENT_LOCK.json"
       - "deploy/evidence/CODESTRA-OBSERVABILITY-SOURCE-INVENTORY.json"
+      - "docs/REPOSITORY-DEVELOPMENT-LOCK.md"
       - "scripts/validate_repository_development_lock.py"
       - "scripts/verify_repository_development_lock_remote.py"
       - "tests/test_repository_development_lock.py"
@@ -14,13 +15,18 @@ on:
     paths:
       - "REPOSITORY_DEVELOPMENT_LOCK.json"
       - "deploy/evidence/CODESTRA-OBSERVABILITY-SOURCE-INVENTORY.json"
+      - "docs/REPOSITORY-DEVELOPMENT-LOCK.md"
       - "scripts/validate_repository_development_lock.py"
       - "scripts/verify_repository_development_lock_remote.py"
       - "tests/test_repository_development_lock.py"
       - ".github/workflows/validate-repository-development-lock.yml"
 
 permissions:
+  actions: read
+  checks: read
   contents: read
+  pull-requests: read
+  statuses: read
 
 jobs:
   validate-source:

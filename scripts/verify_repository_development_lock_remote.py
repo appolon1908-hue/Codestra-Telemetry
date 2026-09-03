@@ -23,6 +23,7 @@ ALLOWED_TELEMETRY_LOCK_CHANGES = {
     ".github/workflows/validate-repository-development-lock.yml",
     "REPOSITORY_DEVELOPMENT_LOCK.json",
     "deploy/evidence/CODESTRA-OBSERVABILITY-SOURCE-INVENTORY.json",
+    "docs/REPOSITORY-DEVELOPMENT-LOCK.md",
     "scripts/validate_repository_development_lock.py",
     "scripts/verify_repository_development_lock_remote.py",
     "tests/test_repository_development_lock.py",
@@ -66,6 +67,36 @@ def repository_content(repository: str, path: str, revision: str) -> str:
     if result.get("encoding") != "base64" or not isinstance(result.get("content"), str):
         fail(f"invalid GitHub content response: {repository}/{path}")
     return base64.b64decode(result["content"]).decode("utf-8")
+
+
+def protected_push_runs(runs: list[dict[str, Any]], branch: str) -> list[dict[str, Any]]:
+    """Return only push evidence produced on the expected protected branch."""
+
+    return [
+        run
+        for run in runs
+        if run.get("event") == "push" and run.get("head_branch") == branch
+    ]
+
+
+def merge_is_ancestor(comparison: dict[str, Any]) -> bool:
+    """Accept only a comparison proving base is equal to or behind head."""
+
+    return comparison.get("status") in {"ahead", "identical"}
+
+
+def postgres_supersession_matches(
+    pull: dict[str, Any], observed: dict[str, Any]
+) -> bool:
+    return (
+        pull.get("state") == "closed"
+        and pull.get("merged") is True
+        and pull.get("draft") is False
+        and pull.get("number") == observed.get("supersedingPullRequest")
+        and pull.get("head", {}).get("sha") == observed.get("supersedingHeadSha")
+        and pull.get("base", {}).get("ref") == "development"
+        and pull.get("merge_commit_sha") == observed.get("supersedingMergeSha")
+    )
 
 
 def verify_telemetry_lock_commit(locked_sha: str, remote_sha: str) -> None:
@@ -126,10 +157,12 @@ def main() -> None:
             ):
                 fail(f"deleted development ref evidence mismatch: {repository}")
 
-        runs = api(f"repos/{repository}/actions/runs?head_sha={revision}&per_page=100")[
-            "workflow_runs"
-        ]
-        push_runs = [run for run in runs if run.get("event") == "push"]
+        protected_branch = "development"
+        runs = api(
+            f"repos/{repository}/actions/runs?branch={protected_branch}"
+            f"&head_sha={revision}&per_page=100"
+        )["workflow_runs"]
+        push_runs = protected_push_runs(runs, protected_branch)
         if len([run for run in push_runs if run.get("conclusion") == "success"]) < locked[
             "successfulProtectedPushRuns"
         ]:
@@ -149,6 +182,15 @@ def main() -> None:
             fail(f"source pull request snapshot drift: {repository}#{pull_number}")
         if observed["merged"] and source_pr.get("merge_commit_sha") != observed["mergeSha"]:
             fail(f"source pull request merge SHA drift: {repository}#{pull_number}")
+        if observed["merged"]:
+            comparison = api(
+                f"repos/{repository}/compare/{observed['mergeSha']}...{revision}"
+            )
+            if not merge_is_ancestor(comparison):
+                fail(
+                    "source pull request merge is not an ancestor of locked "
+                    f"development: {repository}#{pull_number}"
+                )
         files = api(f"repos/{repository}/pulls/{pull_number}/files?per_page=100")
         if sorted(item["filename"] for item in files) != sorted(observed["changedFilenames"]):
             fail(f"source pull request file set drift: {repository}#{pull_number}")
@@ -217,6 +259,22 @@ def main() -> None:
                 or contract.get("canonicalHostname") != "postgres-exporter"
             ):
                 fail("PostgreSQL Exporter superseding contract is not private-only")
+
+    postgres_observed = inventory_by_repo[
+        "appolon1908-hue/Codestra-Postgres-Exporter"
+    ]
+    postgres_superseding = api(
+        "repos/appolon1908-hue/Codestra-Postgres-Exporter/pulls/7"
+    )
+    if not postgres_supersession_matches(postgres_superseding, postgres_observed):
+        fail("PostgreSQL Exporter superseding pull request evidence mismatch")
+    postgres_compare = api(
+        "repos/appolon1908-hue/Codestra-Postgres-Exporter/compare/"
+        f"{postgres_observed['supersedingMergeSha']}..."
+        f"{lock_by_repo['appolon1908-hue/Codestra-Postgres-Exporter']['developmentSha']}"
+    )
+    if not merge_is_ancestor(postgres_compare):
+        fail("PostgreSQL Exporter superseding merge is not in locked development")
 
     obsolete = api("repos/appolon1908-hue/Codestra-OpenBao/pulls/30")
     if obsolete.get("state") != "closed" or obsolete.get("merged") is not False:
