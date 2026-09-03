@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "1.0.0",
+  "capturedAt": "2026-09-03T00:11:02Z",
+  "canonicalSchema": {
+    "repository": "appolon1908-hue/Codestra-Telemetry",
+    "version": "1.0.0",
+    "sourceRevision": "c35d880a730ca5206d445e8a9a688cb465ae2ad4",
+    "path": "codestra/api/service-contract.schema.json",
+    "reusableWorkflowRevision": "c35d880a730ca5206d445e8a9a688cb465ae2ad4",
+    "reusableWorkflowPath": ".github/workflows/reusable-validate-service-contract.yml"
+  },
+  "productionActivation": false,
+  "repositories": [
+    {
+      "serviceId": "opentelemetry",
+      "repository": "appolon1908-hue/Codestra-Telemetry",
+      "sourcePullRequest": 17,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "21c4d25c44613f6b7ca33f8db64e04836f0423ec",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 5
+    },
+    {
+      "serviceId": "prometheus",
+      "repository": "appolon1908-hue/Codestra-Prometheus",
+      "sourcePullRequest": 29,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "fcfaddb9a984c645f9e05687f2e30a4fbcce91aa",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "grafana",
+      "repository": "appolon1908-hue/Codestra-Grafana-",
+      "sourcePullRequest": 17,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "0d6e8259db6016294db910a3dbc38b4586c0927b",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 3
+    },
+    {
+      "serviceId": "alertmanager",
+      "repository": "appolon1908-hue/Codestra-Alertmanager",
+      "sourcePullRequest": 6,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "cd645a49b26aa7635e76ce653b2a4dfe01e4b760",
+      "developmentRefState": "DELETED_AFTER_PROMOTION",
+      "developmentHeadEvidencePullRequest": 9,
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "loki",
+      "repository": "appolon1908-hue/Codestra-Loki",
+      "sourcePullRequest": 17,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "1b29eb41b49e6459ae6d8c6efe0931dcd2ecbcc0",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "tempo",
+      "repository": "appolon1908-hue/Codestra-Tempo",
+      "sourcePullRequest": 15,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "368f5f9ed73330e26b9a221fa3a9c5141203a152",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "alloy",
+      "repository": "appolon1908-hue/Codestra-Alloy",
+      "sourcePullRequest": 17,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "4ddddb2bf4b878ca7385e9ae2bb49a6da651c8c8",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "node-exporter",
+      "repository": "appolon1908-hue/Codestra-Node-Exporter",
+      "sourcePullRequest": 21,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "0af4374328abd11498561a906f31a01bd568d4be",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 1
+    },
+    {
+      "serviceId": "cadvisor",
+      "repository": "appolon1908-hue/Codestra-cAdvisor",
+      "sourcePullRequest": 18,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "7dfd81fe86a01d1ba1046d2c87c8ef52179017c8",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "redis-exporter",
+      "repository": "appolon1908-hue/Codestra-Redis-Exporter",
+      "sourcePullRequest": 18,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "e20808a03e8a1a5d078dfdb322132370ce051ede",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 1
+    },
+    {
+      "serviceId": "postgres-exporter",
+      "repository": "appolon1908-hue/Codestra-Postgres-Exporter",
+      "sourcePullRequest": 6,
+      "sourcePullRequestOutcome": "SUPERSEDED_UNSAFE_PUBLIC_EXPOSURE",
+      "supersedingPullRequest": 7,
+      "developmentSha": "c904f68ed9ba5e780147a707a0a8b445e76dbe77",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 3
+    },
+    {
+      "serviceId": "blackbox-exporter",
+      "repository": "appolon1908-hue/Codestra-Blackbox-Exporter",
+      "sourcePullRequest": 18,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "738742330c61b3e6390347948093b7d9110e4512",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 2
+    },
+    {
+      "serviceId": "superset",
+      "repository": "appolon1908-hue/Superset",
+      "sourcePullRequest": 17,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "226a4777ce990d3a07b2dbd0454d575fbd8565de",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 6
+    },
+    {
+      "serviceId": "openbao",
+      "repository": "appolon1908-hue/Codestra-OpenBao",
+      "sourcePullRequest": 33,
+      "sourcePullRequestOutcome": "MERGED",
+      "developmentSha": "0067e7f49289d39c140145fea64a098821806f0f",
+      "developmentRefState": "PRESENT",
+      "successfulProtectedPushRuns": 7
+    }
+  ]
+}
