@@ -14,7 +14,7 @@ DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 AUTHORITY = (
     "appolon1908-hue/Codestra-Telemetry/.github/workflows/"
-    "reusable-release-image.yml@c327aed6cb43072f5367cd4c52639a901c54e114"
+    "reusable-release-image.yml@5adfee5efbc583b26aaa978e2e4508196d7e0bdc"
 )
 REQUIRED = (
     "REPOSITORY_PROFILE.md",
@@ -25,6 +25,8 @@ REQUIRED = (
     ".dockerignore",
     "codestra/collector.yaml",
     "codestra/deploy/Dockerfile",
+    "codestra/deploy/entrypoint.go",
+    "codestra/deploy/entrypoint_test.go",
     "codestra/release/image-build.v1.json",
     "codestra/release/runtime-base.lock.json",
     "codestra/compose.candidate.yaml",
@@ -40,8 +42,20 @@ def fail(message: str) -> None:
     raise SystemExit(f"ERROR: {message}")
 
 
+def unique_object(pairs: list[tuple[str, object]]) -> dict:
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            fail(f"duplicate JSON key: {key}")
+        value[key] = item
+    return value
+
+
 def load(path: str) -> dict:
-    value = json.loads((ROOT / path).read_text(encoding="utf-8"))
+    value = json.loads(
+        (ROOT / path).read_text(encoding="utf-8"),
+        object_pairs_hook=unique_object,
+    )
     if not isinstance(value, dict):
         fail(f"{path} must contain an object")
     return value
@@ -56,8 +70,10 @@ def main() -> None:
     lock = load("codestra/release/runtime-base.lock.json")
     if (
         manifest.get("imageId") != "opentelemetry"
+        or manifest.get("embedSourceRevision") is not True
         or manifest.get("dockerfile") != "codestra/deploy/Dockerfile"
         or manifest.get("context") != "."
+        or manifest.get("embedSourceRevision") is not True
         or manifest.get("productionActivation") is not False
     ):
         fail("Collector image manifest identity/context/activation mismatch")
@@ -97,18 +113,43 @@ def main() -> None:
     for token in (
         "FROM ${GO_BUILDER_IMAGE} AS healthcheck-builder",
         "FROM ${OTELCOL_BASE_IMAGE}",
+        "ARG CODESTRA_SOURCE_SHA",
+        "ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}",
         "-buildvcs=false",
         "-buildid=",
         "/otelcol-healthcheck",
+        "/codestra-otelcol-entrypoint",
         "/etc/otelcol-contrib/config.yaml",
+        "/usr/share/codestra/source-revision",
         "/usr/share/codestra/runtime-base.lock.json",
+        "ARG CODESTRA_SOURCE_SHA",
+        "ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}",
+        'ENTRYPOINT ["/codestra-otelcol-entrypoint"]',
         "USER 10001:10001",
     ):
         if token not in dockerfile:
             fail(f"Collector build boundary missing: {token}")
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+    for source in (
+        "!codestra/deploy/entrypoint.go",
+        "!codestra/deploy/entrypoint_test.go",
+    ):
+        if source not in dockerignore:
+            fail(f"Collector entrypoint excluded from build context: {source[1:]}")
+    entrypoint = (ROOT / "codestra/deploy/entrypoint.go").read_text(encoding="utf-8")
+    for token in (
+        'serverCertificatePath = "/run/secrets/otelcol_server_cert"',
+        "validateServerCertificate",
+        "certificate.VerifyHostname(hostname)",
+    ):
+        if token not in entrypoint:
+            fail(f"Collector startup certificate identity gate missing: {token}")
     healthcheck = (ROOT / "codestra/deploy/healthcheck.go").read_text(encoding="utf-8")
-    if "http://127.0.0.1:13133/" not in healthcheck or "Getenv" in healthcheck:
-        fail("Collector image health probe must be bounded to loopback")
+    if (
+        "http://otel-collector-platform-metrics:13133/" not in healthcheck
+        or "Getenv" in healthcheck
+    ):
+        fail("Collector image health probe must be bounded to the metrics alias")
 
     compose_text = (ROOT / "codestra/compose.candidate.yaml").read_text(
         encoding="utf-8"
@@ -131,15 +172,27 @@ def main() -> None:
         fail("Collector candidate must use the pre-pulled image and drop capabilities")
     if service.get("environment", {}).get("CODESTRA_BUSINESS") != "platform":
         fail("Collector business identity must be repository-controlled")
+    if service.get("environment", {}).get("CODESTRA_OTLP_BIND_HOST") != "otel-collector-platform-ingress":
+        fail("Collector ingress binding must be repository-controlled")
+    if service.get("environment", {}).get("CODESTRA_METRICS_BIND_HOST") != "otel-collector-platform-metrics":
+        fail("Collector metrics binding must be repository-controlled")
     if service.get("labels", {}).get("codestra.business") != "platform":
         fail("Collector business label must be repository-controlled")
     if service.get("image") != "${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}":
         fail("Collector candidate image input is not fail-closed")
+    if service.get("environment", {}).get("CODESTRA_OTELCOL_IMAGE") != service.get("image"):
+        fail("Collector process must receive the exact immutable image identity")
     if service.get("ports") or set(service.get("networks", {})) != {
         "codestra-business-telemetry",
         "codestra-observability",
     }:
         fail("Collector candidate private network boundary mismatch")
+    if service["networks"]["codestra-business-telemetry"].get("aliases") != [
+        "otel-collector-platform-ingress"
+    ] or service["networks"]["codestra-observability"].get("aliases") != [
+        "otel-collector-platform-metrics"
+    ]:
+        fail("Collector network aliases are ambiguous or cross-boundary")
     secrets = compose.get("secrets", {})
     if set(secrets) != {
         "otelcol_server_cert",
@@ -163,6 +216,8 @@ def main() -> None:
         '"inspect",',
         "org.opencontainers.image.revision",
         "image_revision != source_sha",
+        "CODESTRA_IMAGE_SOURCE_SHA=",
+        "embedded != [f\"CODESTRA_IMAGE_SOURCE_SHA={source_sha}\"]",
         "stderr=subprocess.DEVNULL",
     ):
         if token not in identity_source:
@@ -172,6 +227,22 @@ def main() -> None:
     )
     if '--label "org.opencontainers.image.revision=$source_sha"' not in build_inspection:
         fail("exact local Collector image build must apply the OCI source revision label")
+    for token in (
+        '--build-arg "CODESTRA_SOURCE_SHA=$source_sha"',
+        'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
+        'Entrypoint == ["/codestra-otelcol-entrypoint"]',
+        'CODESTRA_IMAGE_SOURCE_SHA=$source_sha',
+        'target=/run/secrets/otelcol_server_cert,readonly',
+        'source-revision',
+        'docker exec "$container_id" /otelcol-healthcheck',
+        '--add-host otel-collector-platform-ingress:127.0.0.1',
+        '--add-host otel-collector-platform-metrics:127.0.0.1',
+        '--env CODESTRA_OTLP_BIND_HOST=otel-collector-platform-ingress',
+        '--env CODESTRA_METRICS_BIND_HOST=otel-collector-platform-metrics',
+        "--network none",
+    ):
+        if token not in build_inspection:
+            fail(f"Collector startup identity inspection omits: {token}")
 
     release = yaml.safe_load(
         (ROOT / ".github/workflows/release-collector-image.yml").read_text(

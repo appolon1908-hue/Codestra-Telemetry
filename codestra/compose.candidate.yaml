@@ -25,6 +25,9 @@ services:
       CODESTRA_SERVER: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
       CODESTRA_SOURCE_SHA: ${CODESTRA_SOURCE_SHA:?exact protected source SHA is required}
       CODESTRA_IMAGE_DIGEST: ${CODESTRA_IMAGE_DIGEST:?exact image digest is required}
+      CODESTRA_OTELCOL_IMAGE: ${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}
+      CODESTRA_OTLP_BIND_HOST: otel-collector-platform-ingress
+      CODESTRA_METRICS_BIND_HOST: otel-collector-platform-metrics
       TEMPO_OTLP_GRPC_ENDPOINT: ${TEMPO_OTLP_GRPC_ENDPOINT:-tempo:4317}
       TEMPO_TLS_SERVER_NAME: ${TEMPO_TLS_SERVER_NAME:-temp.codestra.media}
       LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-https://loki:3100/otlp}
@@ -45,9 +48,9 @@ services:
       - otelcol-storage:/var/lib/otelcol
     networks:
       codestra-business-telemetry:
-        aliases: [otel-collector]
+        aliases: [otel-collector-platform-ingress]
       codestra-observability:
-        aliases: [otel-collector]
+        aliases: [otel-collector-platform-metrics]
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
     healthcheck:

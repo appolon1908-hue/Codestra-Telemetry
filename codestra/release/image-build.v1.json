@@ -1,6 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "imageId": "opentelemetry",
+  "embedSourceRevision": true,
   "dockerfile": "codestra/deploy/Dockerfile",
   "context": ".",
   "buildArgs": {

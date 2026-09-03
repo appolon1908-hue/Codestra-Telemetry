@@ -6,8 +6,8 @@ This directory is the Codestra runtime authority for receiving OTLP telemetry, a
 
 The Collector does not evaluate alerts, retain long-term application metrics, or replace native service instrumentation. It exposes two private scrape endpoints:
 
-- `otel-collector:8888/metrics`: the Collector's own process, receiver, processor, queue, refusal, and exporter metrics;
-- `otel-collector:8889/metrics`: sanitized OTLP application metrics converted to OpenMetrics.
+- `otel-collector-platform-metrics:8888/metrics`: the Collector's own process, receiver, processor, queue, refusal, and exporter metrics;
+- `otel-collector-platform-metrics:8889/metrics`: sanitized OTLP application metrics converted to OpenMetrics.
 
 `appolon1908-hue/Codestra-Prometheus` owns both scrape targets, target labels, sensitive-label stripping, recording rules, alert evaluation, and retention.
 
@@ -20,6 +20,7 @@ Every service that sends OTLP metrics must provide these bounded resource attrib
 | `codestra.application` | `beyvra` | product/application boundary |
 | `service.name` | `orders-api` | deployable service identity |
 | `service.version` | immutable commit or image digest | deployment evidence |
+| `deployment.id` | immutable deployment identifier | rollout and rollback correlation |
 | `deployment.environment.name` | `staging` | environment boundary |
 | `host.name` | `codestra-core-01` | server boundary |
 | `codestra.tenant_scope` | `aggregate` | tenant-safety declaration |
@@ -34,8 +35,9 @@ Telemetry payloads must never contain passwords, tokens, full message bodies, pa
 
 ## Private network boundary
 
-- Applications reach OTLP gRPC `4317` or OTLP HTTP `4318` only on `codestra-telemetry`.
-- Prometheus, Tempo, Loki, and operators reach `8888`, `8889`, and `13133` only on `codestra-observability`.
+- Applications reach `otel-collector-platform-ingress` on OTLP gRPC `4317` or OTLP HTTP `4318` only on `codestra-telemetry-platform`.
+- Prometheus and operators reach `otel-collector-platform-metrics` on `8888`, `8889`, and `13133` only on `codestra-observability`.
+- The Collector binds each listener to its network-specific alias. OTLP does not listen on the shared observability interface, and scrape/health endpoints do not listen on the business-ingress interface.
 - No port receives a host `ports:` mapping, public DNS route, Caddy route, Kong route, or Internet firewall allowance.
 - `otel.codestra.media` must not be activated until a separate authenticated, rate-limited, tenant-safe ingress design is approved.
 

@@ -23,6 +23,12 @@ This repository owns the collector configuration, telemetry contract, native OTL
 | HTTP | `:8888/metrics` | Collector process, receiver, processor, queue, refusal, and exporter self-metrics | private Prometheus scrape |
 | HTTP | `:8889/metrics` | sanitized OTLP application metrics converted to OpenMetrics | private Prometheus scrape |
 
+OTLP endpoints bind only to the `otel-collector-platform-ingress` alias on the
+business telemetry network. Health and metrics endpoints bind only to the
+`otel-collector-platform-metrics` alias on the observability network. The
+generic `otel-collector` alias and wildcard listeners are prohibited because
+they make ports reachable across both attached networks.
+
 Unexpected `404`, unhandled `5xx`, unauthenticated acceptance, an unavailable required native port, or caller-selected business identity blocks production.
 
 ## Identity, privacy, and routing
@@ -36,6 +42,8 @@ Unexpected `404`, unhandled `5xx`, unauthenticated acceptance, an unavailable re
 - Prometheus owns both private scrape targets `:8888/metrics` and `:8889/metrics`, plus target labels, recording rules, alert evaluation, and retention.
 - Prometheus remains metric/SLO/alert authority; Loki remains log authority; Tempo remains trace authority.
 - Native ingestion and scrape ports are never publicly exposed.
+- The repository-controlled business identity is exactly `platform`; an
+  unknown or caller-supplied business value fails before Collector startup.
 
 ## Production gates
 
@@ -47,6 +55,7 @@ REDACTION_FIXTURES=PASS
 QUEUE_BACKPRESSURE_TESTS=PASS
 TENANT_OVERRIDE_TESTS=PASS
 CALLER_CODESTRA_BUSINESS_FORMS_SANITIZED=PASS
+OTLP_SERVER_CERTIFICATE_INGRESS_DNS_SAN=PASS
 OTLP_HTTP_4318=PASS
 SELF_METRICS_8888=PASS
 APPLICATION_METRICS_8889=PASS
