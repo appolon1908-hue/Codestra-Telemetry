@@ -14,6 +14,7 @@ docker build \
   --file codestra/deploy/Dockerfile \
   --build-arg "GO_BUILDER_IMAGE=$builder" \
   --build-arg "OTELCOL_BASE_IMAGE=$upstream" \
+  --build-arg "CODESTRA_SOURCE_SHA=$source_sha" \
   --label "org.opencontainers.image.revision=$source_sha" \
   --tag "$tag" \
   .
@@ -22,6 +23,9 @@ docker run --rm "$tag" --version | grep -F '0.159.0'
 docker image inspect "$tag" | jq -e \
   '.[0].Config.User == "10001:10001" and .[0].Config.Entrypoint == ["/otelcol-contrib"]'
 test "$(docker image inspect "$tag" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$source_sha"
+embedded_source="$(docker image inspect "$tag" \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^CODESTRA_IMAGE_SOURCE_SHA=' || true)"
+test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"
 
 docker run --rm \
   --env CODESTRA_BUSINESS=platform \

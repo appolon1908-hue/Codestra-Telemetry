@@ -58,7 +58,9 @@ class RepositoryAuthorityTests(unittest.TestCase):
             "codestra/release/image-build.v1.json",
             "codestra/control-api/release/image-build.v1.json",
         ):
-            self.assertFalse(json.loads((ROOT / relative).read_text())["productionActivation"])
+            manifest = json.loads((ROOT / relative).read_text())
+            self.assertFalse(manifest["productionActivation"])
+            self.assertTrue(manifest["embedSourceRevision"])
 
     def test_secret_scan_exceptions_are_exact_test_fixtures(self) -> None:
         config = (ROOT / ".gitleaks.toml").read_text()

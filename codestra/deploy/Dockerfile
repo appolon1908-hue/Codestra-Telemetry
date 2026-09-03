@@ -22,6 +22,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     && install -m 0444 ./metadata/runtime-base.lock.json /out/rootfs/usr/share/codestra/runtime-base.lock.json
 
 FROM ${OTELCOL_BASE_IMAGE}
+ARG CODESTRA_SOURCE_SHA
+ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}
 LABEL org.opencontainers.image.title="Codestra Corporate OpenTelemetry Collector"
 LABEL org.opencontainers.image.description="Business-isolated OTLP ingestion, redaction, tail sampling, durable queues and corporate telemetry normalization"
 LABEL org.opencontainers.image.vendor="Codestra"

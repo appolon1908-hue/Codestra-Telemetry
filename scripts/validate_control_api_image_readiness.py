@@ -13,7 +13,7 @@ IMAGE = re.compile(r"^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 AUTHORITY = (
     "appolon1908-hue/Codestra-Telemetry/.github/workflows/"
-    "reusable-release-image.yml@37b8648bced4068b4287b39c9ff7a7174f0a9c28"
+    "reusable-release-image.yml@5adfee5efbc583b26aaa978e2e4508196d7e0bdc"
 )
 REQUIRED = (
     "REPOSITORY_PROFILE.md",
@@ -53,6 +53,7 @@ def main() -> None:
     lock = load("codestra/control-api/release/runtime-base.lock.json")
     if (
         manifest.get("imageId") != "control-api"
+        or manifest.get("embedSourceRevision") is not True
         or manifest.get("dockerfile") != "codestra/control-api/Dockerfile"
         or manifest.get("context") != "codestra/control-api"
         or manifest.get("productionActivation") is not False
@@ -83,6 +84,8 @@ def main() -> None:
     for token in (
         "FROM ${GO_BUILDER_IMAGE} AS build",
         "FROM ${RUNTIME_IMAGE}",
+        "ARG CODESTRA_SOURCE_SHA",
+        "ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}",
         "-buildvcs=false",
         "-buildid=",
         "cmd/healthcheck",
@@ -135,6 +138,8 @@ def main() -> None:
         '"inspect",',
         "org.opencontainers.image.revision",
         "image_revision != source_sha",
+        "CODESTRA_IMAGE_SOURCE_SHA=",
+        "embedded != [f\"CODESTRA_IMAGE_SOURCE_SHA={source_sha}\"]",
         "stderr=subprocess.DEVNULL",
     ):
         if token not in identity_source:
@@ -144,6 +149,12 @@ def main() -> None:
     )
     if '--label "org.opencontainers.image.revision=$source_sha"' not in build_inspection:
         fail("exact local image build must apply the OCI source revision label")
+    for token in (
+        '--build-arg "CODESTRA_SOURCE_SHA=$source_sha"',
+        'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
+    ):
+        if token not in build_inspection:
+            fail(f"exact local control API image build lacks source embedding: {token}")
 
     release = yaml.safe_load(
         (ROOT / ".github/workflows/release-control-api-image.yml").read_text(
