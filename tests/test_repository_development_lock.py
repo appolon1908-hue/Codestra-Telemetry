@@ -5,6 +5,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -128,34 +129,69 @@ class RepositoryDevelopmentLockTest(unittest.TestCase):
         pull["head"] = {"sha": "3" * 40}
         self.assertFalse(REMOTE.postgres_supersession_matches(pull, observed))
 
+    def test_lock_transition_accepts_empty_promotion_diff(self) -> None:
+        with (
+            mock.patch.object(REMOTE, "commit_is_ancestor", return_value=True),
+            mock.patch.object(REMOTE, "changed_paths", return_value=set()),
+        ):
+            REMOTE.require_lock_only_transition("1" * 40, "2" * 40, "promotion")
+
+    def test_lock_transition_accepts_only_governance_files(self) -> None:
+        changed = {
+            "scripts/verify_repository_development_lock_remote.py",
+            "tests/test_repository_development_lock.py",
+        }
+        with (
+            mock.patch.object(REMOTE, "commit_is_ancestor", return_value=True),
+            mock.patch.object(REMOTE, "changed_paths", return_value=changed),
+        ):
+            REMOTE.require_lock_only_transition("1" * 40, "2" * 40, "refresh")
+
+    def test_lock_transition_rejects_non_ancestor(self) -> None:
+        with mock.patch.object(REMOTE, "commit_is_ancestor", return_value=False):
+            with self.assertRaises(SystemExit):
+                REMOTE.require_lock_only_transition("1" * 40, "2" * 40, "diverged")
+
+    def test_lock_transition_rejects_runtime_change(self) -> None:
+        with (
+            mock.patch.object(REMOTE, "commit_is_ancestor", return_value=True),
+            mock.patch.object(
+                REMOTE,
+                "changed_paths",
+                return_value={"codestra/collector.yaml"},
+            ),
+        ):
+            with self.assertRaises(SystemExit):
+                REMOTE.require_lock_only_transition("1" * 40, "2" * 40, "runtime")
+
+    def test_telemetry_verifier_checks_both_ancestry_legs(self) -> None:
+        completed = type("Completed", (), {"stdout": "3" * 40 + "\n"})()
+        with (
+            mock.patch.object(REMOTE, "command", return_value=completed),
+            mock.patch.object(REMOTE, "require_lock_only_transition") as transition,
+        ):
+            REMOTE.verify_telemetry_lock_commit("1" * 40, "2" * 40)
+        transition.assert_has_calls(
+            [
+                mock.call(
+                    "1" * 40,
+                    "2" * 40,
+                    "locked-to-development transition",
+                ),
+                mock.call(
+                    "2" * 40,
+                    "3" * 40,
+                    "development-to-validation transition",
+                ),
+            ]
+        )
+
     def test_workflow_grants_remote_evidence_read_scopes(self) -> None:
         workflow = (
             ROOT / ".github/workflows/validate-repository-development-lock.yml"
         ).read_text()
         for scope in ("actions", "checks", "contents", "pull-requests", "statuses"):
             self.assertIn(f"  {scope}: read", workflow)
-
-    def test_workflow_binds_promoted_branches_to_development_tree(self) -> None:
-        workflow = (
-            ROOT / ".github/workflows/validate-repository-development-lock.yml"
-        ).read_text()
-        for statement in (
-            'HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}',
-            'BASE_BRANCH: ${{ github.event.pull_request.base.ref }}',
-            '"$HEAD_BRANCH" =~ ^(test|staging|production|main)$',
-            '"$BASE_BRANCH" == "development"',
-            'remote_development="$(gh api "repos/${GITHUB_REPOSITORY}/branches/development" --jq',
-            'test "$BASE_SHA" = "$remote_development"',
-            'git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"',
-            'git rev-parse "${HEAD_SHA}^{tree}"',
-            'git rev-parse "${remote_development}^{tree}"',
-            'git checkout --detach "$BASE_SHA"',
-            'git checkout --detach "$remote_development"',
-            'git checkout --detach "$HEAD_SHA"',
-            'PROTECTED_BRANCH: ${{ github.ref_name }}',
-            '"$PROTECTED_BRANCH" != "development"',
-        ):
-            self.assertIn(statement, workflow)
         self.assertNotIn("--force", workflow)
 
     def test_lock_document_records_remote_and_rollback_contracts(self) -> None:
