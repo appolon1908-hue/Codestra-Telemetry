@@ -136,6 +136,14 @@ def main() -> None:
     ):
         if source not in dockerignore:
             fail(f"Collector entrypoint excluded from build context: {source[1:]}")
+    entrypoint = (ROOT / "codestra/deploy/entrypoint.go").read_text(encoding="utf-8")
+    for token in (
+        'serverCertificatePath = "/run/secrets/otelcol_server_cert"',
+        "validateServerCertificate",
+        "certificate.VerifyHostname(hostname)",
+    ):
+        if token not in entrypoint:
+            fail(f"Collector startup certificate identity gate missing: {token}")
     healthcheck = (ROOT / "codestra/deploy/healthcheck.go").read_text(encoding="utf-8")
     if (
         "http://otel-collector-platform-metrics:13133/" not in healthcheck
@@ -224,6 +232,7 @@ def main() -> None:
         'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
         'Entrypoint == ["/codestra-otelcol-entrypoint"]',
         'CODESTRA_IMAGE_SOURCE_SHA=$source_sha',
+        'target=/run/secrets/otelcol_server_cert,readonly',
         'source-revision',
         'docker exec "$container_id" /otelcol-healthcheck',
         '--add-host otel-collector-platform-ingress:127.0.0.1',
