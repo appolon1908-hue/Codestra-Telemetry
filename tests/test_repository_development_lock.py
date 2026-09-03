@@ -135,6 +135,24 @@ class RepositoryDevelopmentLockTest(unittest.TestCase):
         for scope in ("actions", "checks", "contents", "pull-requests", "statuses"):
             self.assertIn(f"  {scope}: read", workflow)
 
+    def test_workflow_binds_promoted_branches_to_development_tree(self) -> None:
+        workflow = (
+            ROOT / ".github/workflows/validate-repository-development-lock.yml"
+        ).read_text()
+        for statement in (
+            'HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}',
+            '"$HEAD_BRANCH" =~ ^(test|staging|production|main)$',
+            'remote_development="$(gh api "repos/${GITHUB_REPOSITORY}/branches/development" --jq',
+            'git rev-parse "${HEAD_SHA}^{tree}"',
+            'git rev-parse "${remote_development}^{tree}"',
+            'git checkout --detach "$remote_development"',
+            'git checkout --detach "$HEAD_SHA"',
+            'PROTECTED_BRANCH: ${{ github.ref_name }}',
+            '"$PROTECTED_BRANCH" != "development"',
+        ):
+            self.assertIn(statement, workflow)
+        self.assertNotIn("--force", workflow)
+
     def test_lock_document_records_remote_and_rollback_contracts(self) -> None:
         documentation = " ".join(
             (ROOT / "docs/REPOSITORY-DEVELOPMENT-LOCK.md").read_text().split()
