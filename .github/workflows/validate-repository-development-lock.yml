@@ -1,0 +1,89 @@
+name: Validate repository development lock
+
+on:
+  pull_request:
+    paths:
+      - "REPOSITORY_DEVELOPMENT_LOCK.json"
+      - "deploy/evidence/CODESTRA-OBSERVABILITY-SOURCE-INVENTORY.json"
+      - "scripts/validate_repository_development_lock.py"
+      - "scripts/verify_repository_development_lock_remote.py"
+      - "tests/test_repository_development_lock.py"
+      - ".github/workflows/validate-repository-development-lock.yml"
+  push:
+    branches: [development, test, staging, production, main]
+    paths:
+      - "REPOSITORY_DEVELOPMENT_LOCK.json"
+      - "deploy/evidence/CODESTRA-OBSERVABILITY-SOURCE-INVENTORY.json"
+      - "scripts/validate_repository_development_lock.py"
+      - "scripts/verify_repository_development_lock_remote.py"
+      - "tests/test_repository_development_lock.py"
+      - ".github/workflows/validate-repository-development-lock.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+      - name: Validate exact source lock and current remote state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python3 scripts/validate_repository_development_lock.py
+          python3 scripts/verify_repository_development_lock_remote.py
+          python3 -m unittest tests.test_repository_development_lock
+          git diff --check "$BASE_SHA" "$HEAD_SHA"
+
+  validate-merge-result:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+      - name: Validate exact synthetic merge result
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 scripts/validate_repository_development_lock.py
+          python3 -m unittest tests.test_repository_development_lock
+
+  validate-protected:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+      - name: Validate exact protected source lock and current remote state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 scripts/validate_repository_development_lock.py
+          python3 scripts/verify_repository_development_lock_remote.py
+          python3 -m unittest tests.test_repository_development_lock
