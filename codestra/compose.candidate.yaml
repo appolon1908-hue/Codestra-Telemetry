@@ -2,14 +2,11 @@ name: codestra-opentelemetry-collector
 
 services:
   otel-collector:
-    build:
-      context: ..
-      dockerfile: codestra/deploy/Dockerfile
-      args:
-        GO_BUILDER_IMAGE: ${GO_BUILDER_IMAGE:?set an immutable Go builder image containing @sha256:}
-        OTELCOL_BASE_IMAGE: ${OTELCOL_BASE_IMAGE:?set an immutable official Collector image containing @sha256:}
-    image: ${CODESTRA_OTELCOL_IMAGE:?set an immutable Codestra Collector image containing @sha256:}
-    restart: unless-stopped
+    image: ${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}
+    pull_policy: never
+    profiles:
+      - candidate-after-approval
+    restart: "no"
     init: true
     user: "10001:10001"
     read_only: true
@@ -22,10 +19,12 @@ services:
     command:
       - --config=/etc/otelcol-contrib/config.yaml
     environment:
-      CODESTRA_BUSINESS: ${CODESTRA_BUSINESS:?approved Codestra business identity is required}
+      CODESTRA_BUSINESS: platform
       CODESTRA_ENVIRONMENT: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
       CODESTRA_REGION: ${CODESTRA_REGION:?CODESTRA_REGION is required}
       CODESTRA_SERVER: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
+      CODESTRA_SOURCE_SHA: ${CODESTRA_SOURCE_SHA:?exact protected source SHA is required}
+      CODESTRA_IMAGE_DIGEST: ${CODESTRA_IMAGE_DIGEST:?exact image digest is required}
       TEMPO_OTLP_GRPC_ENDPOINT: ${TEMPO_OTLP_GRPC_ENDPOINT:-tempo:4317}
       TEMPO_TLS_SERVER_NAME: ${TEMPO_TLS_SERVER_NAME:-temp.codestra.media}
       LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-https://loki:3100/otlp}
@@ -46,15 +45,13 @@ services:
       - otelcol-storage:/var/lib/otelcol
     networks:
       codestra-business-telemetry:
-        aliases:
-          - otel-collector
+        aliases: [otel-collector]
       codestra-observability:
-        aliases:
-          - otel-collector
+        aliases: [otel-collector]
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
     healthcheck:
-      test: ["CMD", "/otelcol-healthcheck"]
+      test: [CMD, /otelcol-healthcheck]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -65,15 +62,15 @@ services:
         max-size: 25m
         max-file: "3"
     labels:
-      codestra.business: ${CODESTRA_BUSINESS:?approved Codestra business identity is required}
+      codestra.business: platform
       codestra.application: observability
       codestra.service: opentelemetry-collector
       codestra.environment: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
       codestra.region: ${CODESTRA_REGION:?CODESTRA_REGION is required}
       codestra.server: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
-      codestra.telemetry.business-identity: deployment-controlled
+      codestra.deployment: ${CODESTRA_OTELCOL_DEPLOYMENT_ID:?immutable deployment ID is required}
+      codestra.telemetry.business-identity: repository-controlled
       codestra.telemetry.ingress-mtls: required
-      codestra.telemetry.durable-queues: "true"
     deploy:
       resources:
         limits:
@@ -87,7 +84,7 @@ services:
 networks:
   codestra-business-telemetry:
     external: true
-    name: ${CODESTRA_BUSINESS_TELEMETRY_NETWORK:?business-isolated telemetry network is required}
+    name: ${CODESTRA_BUSINESS_TELEMETRY_NETWORK:-codestra-telemetry-platform}
   codestra-observability:
     external: true
     name: ${CODESTRA_OBSERVABILITY_NETWORK:-codestra-observability}
@@ -95,18 +92,14 @@ networks:
 volumes:
   otelcol-storage:
     external: true
-    name: codestra-${CODESTRA_BUSINESS:?approved Codestra business identity is required}-otelcol-storage
+    name: codestra-platform-otelcol-storage
 
 secrets:
   otelcol_server_cert:
-    external: true
-    name: ${OTELCOL_SERVER_CERT_SECRET_NAME:-otelcol-server-cert}
+    file: ${OTELCOL_SERVER_CERT_FILE_SOURCE:?mounted Collector server certificate is required}
   otelcol_server_key:
-    external: true
-    name: ${OTELCOL_SERVER_KEY_SECRET_NAME:-otelcol-server-key}
+    file: ${OTELCOL_SERVER_KEY_FILE_SOURCE:?mounted Collector server key is required}
   otelcol_client_ca:
-    external: true
-    name: ${OTELCOL_CLIENT_CA_SECRET_NAME:-otelcol-client-ca}
+    file: ${OTELCOL_CLIENT_CA_FILE_SOURCE:?mounted Collector client CA is required}
   otelcol_backend_ca:
-    external: true
-    name: ${OTELCOL_BACKEND_CA_SECRET_NAME:-otelcol-backend-ca}
+    file: ${OTELCOL_BACKEND_CA_FILE_SOURCE:?mounted Collector backend CA is required}

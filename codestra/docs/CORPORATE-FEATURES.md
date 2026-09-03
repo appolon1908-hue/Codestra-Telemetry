@@ -25,7 +25,7 @@ Each Collector instance belongs to exactly one approved business:
 - `restaurant`
 - `provisioning`
 
-The deployment controller sets `CODESTRA_BUSINESS`; the Collector overwrites any caller-supplied `codestra.business` value. Each instance joins one business-specific ingress network plus the shared private observability network. Unknown business IDs and cross-business network access are release blockers.
+This repository's deployment candidate fixes `CODESTRA_BUSINESS` to `platform` in reviewed Compose source; the Collector overwrites any caller-supplied `codestra.business` value. No workflow, caller, environment file or runtime flag may choose the business identity. A business-specific instance requires a separately reviewed source authority and isolated queue. Each instance joins one business-specific ingress network plus the shared private observability network. Unknown business IDs and cross-business network access are release blockers.
 
 OTLP/gRPC and OTLP/HTTP require a server certificate, private key and trusted client CA. Direct browser ingestion is prohibited. Browser telemetry must pass through an approved same-origin or backend path that applies rate limits, consent and data-minimization controls.
 

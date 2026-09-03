@@ -38,7 +38,7 @@ AUTHORITIES = [
     ("superset", "appolon1908-hue/Superset", "supe.codestra.media", "certified-read-only-business-analytics-authority", "loopback_edge_only"),
     ("node-exporter", "appolon1908-hue/Codestra-Node-Exporter", "node.codestra.media", "host-metrics-operational-evidence-authority", "internal_private"),
     ("cadvisor", "appolon1908-hue/Codestra-cAdvisor", "cadv.codestra.media", "container-resource-metrics-authority", "internal_private"),
-    ("postgres-exporter", "appolon1908-hue/Codestra-Postgres-Exporter", "pgex.codestra.media", "postgresql-health-capacity-replication-metrics-authority", "internal_private"),
+    ("postgres-exporter", "appolon1908-hue/Codestra-Postgres-Exporter", "postgres-exporter", "postgresql-health-capacity-replication-metrics-authority", "internal_private"),
     ("redis-exporter", "appolon1908-hue/Codestra-Redis-Exporter", "rdex.codestra.media", "redis-health-capacity-persistence-metrics-authority", "internal_private"),
     ("blackbox-exporter", "appolon1908-hue/Codestra-Blackbox-Exporter", "blac.codestra.media", "synthetic-availability-dns-tls-authority", "internal_private"),
     ("alloy", "appolon1908-hue/Codestra-Alloy", "allo.codestra.media", "host-service-log-collection-agent-authority", "internal_private"),
