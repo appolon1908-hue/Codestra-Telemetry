@@ -137,8 +137,11 @@ def main() -> None:
         "codestra/control-api/release/image-build.v1.json",
     ):
         manifest = load(relative)
-        if manifest.get("productionActivation") is not False:
-            fail(f"image manifest activates production: {relative}")
+        if (
+            manifest.get("productionActivation") is not False
+            or manifest.get("embedSourceRevision") is not True
+        ):
+            fail(f"image manifest activation/source identity mismatch: {relative}")
         args = manifest.get("buildArgs")
         if not isinstance(args, dict) or not args or any(
             not IMAGE.fullmatch(str(value)) for value in args.values()

@@ -180,6 +180,8 @@ def validate_collector() -> None:
     extensions = config.get("extensions", {})
     if set(extensions) != {"health_check", "file_storage"}:
         fail("Collector extensions must be health_check and file_storage")
+    if extensions["health_check"].get("endpoint") != "${env:CODESTRA_METRICS_BIND_HOST}:13133":
+        fail("Collector health listener must bind only to the metrics network alias")
     if extensions["file_storage"].get("directory") != "/var/lib/otelcol/storage":
         fail("file-backed exporter queues must use the durable Collector volume")
 
@@ -190,6 +192,9 @@ def validate_collector() -> None:
     if set(protocols) != {"grpc", "http"}:
         fail("Collector must support OTLP/gRPC and OTLP/HTTP")
     for protocol, settings in protocols.items():
+        expected_port = "4317" if protocol == "grpc" else "4318"
+        if settings.get("endpoint") != f"${{env:CODESTRA_OTLP_BIND_HOST}}:{expected_port}":
+            fail(f"OTLP/{protocol} must bind only to the business ingress alias")
         tls = settings.get("tls", {})
         required = {
             "cert_file": "/run/secrets/otelcol_server_cert",
@@ -329,6 +334,18 @@ def validate_collector() -> None:
     telemetry = service.get("telemetry", {})
     if telemetry.get("logs", {}).get("encoding") != "json":
         fail("Collector self logs must be JSON")
+    if (
+        config.get("exporters", {}).get("prometheus", {}).get("endpoint")
+        != "${env:CODESTRA_METRICS_BIND_HOST}:8889"
+        or telemetry.get("metrics", {})
+        .get("readers", [{}])[0]
+        .get("pull", {})
+        .get("exporter", {})
+        .get("prometheus", {})
+        .get("host")
+        != "${env:CODESTRA_METRICS_BIND_HOST}"
+    ):
+        fail("Collector metrics listeners must bind only to the metrics alias")
 
 
 def validate_runtime() -> None:
@@ -387,6 +404,19 @@ def validate_runtime() -> None:
     environment = service.get("environment", {})
     if environment.get("CODESTRA_BUSINESS") != "platform":
         fail("Collector business identity must be repository-controlled")
+    if environment.get("CODESTRA_OTLP_BIND_HOST") != "otel-collector-platform-ingress":
+        fail("Collector OTLP bind identity must be repository-controlled")
+    if environment.get("CODESTRA_METRICS_BIND_HOST") != "otel-collector-platform-metrics":
+        fail("Collector metrics bind identity must be repository-controlled")
+    networks = service.get("networks", {})
+    if networks.get("codestra-business-telemetry", {}).get("aliases") != [
+        "otel-collector-platform-ingress"
+    ]:
+        fail("Collector business ingress alias must be unique")
+    if networks.get("codestra-observability", {}).get("aliases") != [
+        "otel-collector-platform-metrics"
+    ]:
+        fail("Collector observability alias must be unique")
     for key in ("CODESTRA_SOURCE_SHA", "CODESTRA_IMAGE_DIGEST"):
         if key not in environment:
             fail(f"Collector runtime identity is missing {key}")
@@ -406,6 +436,9 @@ def validate_runtime() -> None:
         "/var/run/docker.sock",
         "0.0.0.0:4317",
         "0.0.0.0:4318",
+        "0.0.0.0:8888",
+        "0.0.0.0:8889",
+        "aliases: [otel-collector]",
     ):
         if forbidden in serialized:
             fail(f"Collector runtime contains forbidden content: {forbidden}")
@@ -433,8 +466,8 @@ def validate_runtime() -> None:
     if any(set(value) != {"file"} for value in top_secrets.values()):
         fail("Collector secrets must be sourced only from mounted files")
     healthcheck = require_file(HEALTHCHECK)
-    if "http://127.0.0.1:13133/" not in healthcheck:
-        fail("Collector health probe must use the local health extension")
+    if "http://otel-collector-platform-metrics:13133/" not in healthcheck:
+        fail("Collector health probe must use the unique metrics alias")
     if "os/exec" in healthcheck or "exec.Command" in healthcheck:
         fail("Collector health probe may not invoke a shell or subprocess")
     if "Getenv" in healthcheck:

@@ -49,6 +49,28 @@ def main() -> None:
         fail("exact pulled image has no valid OCI source revision read-back")
     if image_revision != source_sha:
         fail("source SHA differs from exact pulled image OCI revision")
+    env_result = subprocess.run(
+        [
+            "docker",
+            "image",
+            "inspect",
+            image,
+            "--format",
+            "{{range .Config.Env}}{{println .}}{{end}}",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=15,
+    )
+    embedded = [
+        line
+        for line in env_result.stdout.splitlines()
+        if line.startswith("CODESTRA_IMAGE_SOURCE_SHA=")
+    ]
+    if env_result.returncode != 0 or embedded != [f"CODESTRA_IMAGE_SOURCE_SHA={source_sha}"]:
+        fail("exact pulled image does not embed its protected source SHA")
     print("COLLECTOR_RUNTIME_IDENTITY=PASS")
 
 
