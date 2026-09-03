@@ -46,11 +46,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           python3 scripts/validate_repository_development_lock.py
-          python3 scripts/verify_repository_development_lock_remote.py
+
+          if [[ "$HEAD_BRANCH" =~ ^(test|staging|production|main)$ ]]; then
+            remote_development="$(gh api "repos/${GITHUB_REPOSITORY}/branches/development" --jq '.commit.sha')"
+            [[ "$remote_development" =~ ^[0-9a-f]{40}$ ]]
+            if ! git cat-file -e "${remote_development}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$remote_development"
+            fi
+            test "$(git rev-parse "${HEAD_SHA}^{tree}")" = "$(git rev-parse "${remote_development}^{tree}")"
+            git checkout --detach "$remote_development"
+            python3 scripts/verify_repository_development_lock_remote.py
+            git checkout --detach "$HEAD_SHA"
+          else
+            python3 scripts/verify_repository_development_lock_remote.py
+          fi
+
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           python3 -m unittest tests.test_repository_development_lock
           git diff --check "$BASE_SHA" "$HEAD_SHA"
 
@@ -68,6 +85,7 @@ jobs:
           python-version: "3.13"
       - name: Validate exact synthetic merge result
         run: |
+          set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 scripts/validate_repository_development_lock.py
           python3 -m unittest tests.test_repository_development_lock
@@ -88,8 +106,26 @@ jobs:
       - name: Validate exact protected source lock and current remote state
         env:
           GH_TOKEN: ${{ github.token }}
+          PROTECTED_SHA: ${{ github.sha }}
+          PROTECTED_BRANCH: ${{ github.ref_name }}
         run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$PROTECTED_SHA"
           python3 scripts/validate_repository_development_lock.py
-          python3 scripts/verify_repository_development_lock_remote.py
+
+          if [[ "$PROTECTED_BRANCH" != "development" ]]; then
+            remote_development="$(gh api "repos/${GITHUB_REPOSITORY}/branches/development" --jq '.commit.sha')"
+            [[ "$remote_development" =~ ^[0-9a-f]{40}$ ]]
+            if ! git cat-file -e "${remote_development}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$remote_development"
+            fi
+            test "$(git rev-parse "${PROTECTED_SHA}^{tree}")" = "$(git rev-parse "${remote_development}^{tree}")"
+            git checkout --detach "$remote_development"
+            python3 scripts/verify_repository_development_lock_remote.py
+            git checkout --detach "$PROTECTED_SHA"
+          else
+            python3 scripts/verify_repository_development_lock_remote.py
+          fi
+
+          test "$(git rev-parse HEAD)" = "$PROTECTED_SHA"
           python3 -m unittest tests.test_repository_development_lock
