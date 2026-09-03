@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const defaultURL = "http://127.0.0.1:13133/"
+const defaultURL = "http://otel-collector-platform-metrics:13133/"
 
 func main() {
 	client := &http.Client{

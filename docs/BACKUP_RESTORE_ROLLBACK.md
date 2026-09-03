@@ -11,3 +11,10 @@ OCI repository and digest. Startup is intentionally denied when that runtime
 tuple differs from the source revision embedded in the prior image; bypassing
 the Collector entrypoint or control API identity check is not an approved
 rollback mechanism.
+
+The rollback manifest must retain the prior pair of network-specific aliases
+with its configuration checksum. Before selecting the prior digest, verify that
+its OTLP receivers bind only to the business-ingress alias and its health and
+metrics listeners bind only to the observability alias. A rollback that restores
+the shared `otel-collector` alias or any `0.0.0.0` listener is unsafe; use a
+forward fix instead.

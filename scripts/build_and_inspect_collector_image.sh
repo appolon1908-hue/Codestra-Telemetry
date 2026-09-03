@@ -15,6 +15,9 @@ identity_environment=(
   --env "CODESTRA_SOURCE_SHA=$source_sha"
   --env "CODESTRA_IMAGE_DIGEST=$digest"
   --env "CODESTRA_OTELCOL_IMAGE=$identity"
+  --env CODESTRA_BUSINESS=platform
+  --env CODESTRA_OTLP_BIND_HOST=otel-collector-platform-ingress
+  --env CODESTRA_METRICS_BIND_HOST=otel-collector-platform-metrics
 )
 
 docker build \
@@ -43,8 +46,9 @@ if docker run --rm \
 fi
 
 docker run --rm \
+  --add-host otel-collector-platform-ingress:127.0.0.1 \
+  --add-host otel-collector-platform-metrics:127.0.0.1 \
   "${identity_environment[@]}" \
-  --env CODESTRA_BUSINESS=platform \
   --env CODESTRA_ENVIRONMENT=test \
   --env CODESTRA_REGION=ci \
   --env CODESTRA_SERVER=github-actions \
@@ -71,8 +75,8 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -subj /CN=codestra-disposable-ca \
   -keyout "$secret_root/ca.key" -out "$secret_root/ca.crt" >/dev/null 2>&1
 openssl req -newkey rsa:2048 -nodes \
-  -subj /CN=otel-collector \
-  -addext subjectAltName=IP:127.0.0.1,DNS:otel-collector \
+  -subj /CN=otel-collector-platform-ingress \
+  -addext subjectAltName=IP:127.0.0.1,DNS:otel-collector-platform-ingress \
   -keyout "$secret_root/server.key" -out "$secret_root/server.csr" >/dev/null 2>&1
 openssl x509 -req -days 1 -sha256 \
   -in "$secret_root/server.csr" -CA "$secret_root/ca.crt" -CAkey "$secret_root/ca.key" \
@@ -81,10 +85,11 @@ chmod 0444 "$secret_root/ca.crt" "$secret_root/server.crt" "$secret_root/server.
 chmod 0555 "$secret_root"
 
 container_id="$(docker run -d --network none --read-only \
+  --add-host otel-collector-platform-ingress:127.0.0.1 \
+  --add-host otel-collector-platform-metrics:127.0.0.1 \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
   --tmpfs /var/lib/otelcol/storage:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=64m \
   "${identity_environment[@]}" \
-  --env CODESTRA_BUSINESS=platform \
   --env CODESTRA_ENVIRONMENT=test \
   --env CODESTRA_REGION=ci \
   --env CODESTRA_SERVER=github-actions \

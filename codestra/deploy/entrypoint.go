@@ -15,6 +15,8 @@ var (
 )
 
 const embeddedSourcePath = "/usr/share/codestra/source-revision"
+const otlpBindHost = "otel-collector-platform-ingress"
+const metricsBindHost = "otel-collector-platform-metrics"
 
 func validateIdentity(source, bakedSource, digest, image, embeddedSource string) error {
 	if !sourcePattern.MatchString(source) || !sourcePattern.MatchString(bakedSource) || !sourcePattern.MatchString(embeddedSource) {
@@ -26,6 +28,13 @@ func validateIdentity(source, bakedSource, digest, image, embeddedSource string)
 	match := imagePattern.FindStringSubmatch(image)
 	if !digestPattern.MatchString(digest) || len(match) != 2 || match[1] != digest {
 		return fmt.Errorf("runtime image identity is malformed or inconsistent")
+	}
+	return nil
+}
+
+func validateTopology(business, otlpHost, metricsHost string) error {
+	if business != "platform" || otlpHost != otlpBindHost || metricsHost != metricsBindHost {
+		return fmt.Errorf("runtime topology differs from the repository authority")
 	}
 	return nil
 }
@@ -44,6 +53,14 @@ func main() {
 		strings.TrimSpace(string(embedded)),
 	); err != nil {
 		fmt.Fprintln(os.Stderr, "collector startup identity validation failed")
+		os.Exit(78)
+	}
+	if err := validateTopology(
+		strings.TrimSpace(os.Getenv("CODESTRA_BUSINESS")),
+		strings.TrimSpace(os.Getenv("CODESTRA_OTLP_BIND_HOST")),
+		strings.TrimSpace(os.Getenv("CODESTRA_METRICS_BIND_HOST")),
+	); err != nil {
+		fmt.Fprintln(os.Stderr, "collector startup topology validation failed")
 		os.Exit(78)
 	}
 	if err := syscall.Exec("/otelcol-contrib", append([]string{"/otelcol-contrib"}, os.Args[1:]...), os.Environ()); err != nil {

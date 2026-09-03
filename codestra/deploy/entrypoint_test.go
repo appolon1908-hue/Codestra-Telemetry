@@ -25,3 +25,20 @@ func TestValidateIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateTopology(t *testing.T) {
+	if err := validateTopology("platform", otlpBindHost, metricsBindHost); err != nil {
+		t.Fatalf("valid topology rejected: %v", err)
+	}
+	for name, values := range map[string][]string{
+		"unknown business": {"platfrom", otlpBindHost, metricsBindHost},
+		"shared alias":     {"platform", "otel-collector", metricsBindHost},
+		"swapped aliases":  {"platform", metricsBindHost, otlpBindHost},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateTopology(values[0], values[1], values[2]); err == nil {
+				t.Fatal("invalid topology accepted")
+			}
+		})
+	}
+}
