@@ -48,6 +48,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
           set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
@@ -61,6 +62,17 @@ jobs:
             fi
             test "$(git rev-parse "${HEAD_SHA}^{tree}")" = "$(git rev-parse "${remote_development}^{tree}")"
             git checkout --detach "$remote_development"
+            python3 scripts/verify_repository_development_lock_remote.py
+            git checkout --detach "$HEAD_SHA"
+          elif [[ "$BASE_BRANCH" == "development" ]]; then
+            remote_development="$(gh api "repos/${GITHUB_REPOSITORY}/branches/development" --jq '.commit.sha')"
+            [[ "$remote_development" =~ ^[0-9a-f]{40}$ ]]
+            test "$BASE_SHA" = "$remote_development"
+            if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            fi
+            git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"
+            git checkout --detach "$BASE_SHA"
             python3 scripts/verify_repository_development_lock_remote.py
             git checkout --detach "$HEAD_SHA"
           else
