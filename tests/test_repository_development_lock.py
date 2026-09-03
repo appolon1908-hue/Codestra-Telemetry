@@ -45,7 +45,7 @@ class RepositoryDevelopmentLockTest(unittest.TestCase):
         )
         self.assertEqual(
             locked["prometheus"],
-            ("7200303d8058f2a144c0a0a96a6da01a6d96a04b", 3),
+            ("e45cf15cd71e5ade8e11e58771b6c480bb32a003", 2),
         )
         self.assertEqual(
             locked["alloy"],
