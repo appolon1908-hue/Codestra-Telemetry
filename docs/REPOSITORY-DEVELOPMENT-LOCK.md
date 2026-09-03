@@ -48,9 +48,13 @@ This refresh records the protected descendants that completed after the
 original source inventory was captured:
 
 - OpenTelemetry: `81552819fd16f8275b5711cd882347b605b3f5a3`
-- Prometheus: `7200303d8058f2a144c0a0a96a6da01a6d96a04b`
+- Prometheus: `e45cf15cd71e5ade8e11e58771b6c480bb32a003`
 - Alloy: `f4c4e6b19e6274578a97e1db0ca85e32339a2062`
 - Superset: `d656a0eac2f8c335519e2ed3da2bd19046a54fbe`
+
+Prometheus is captured after the protected merge of PR #41 corrected the
+invalid workflow context that had produced a failed protected-push run. The
+replacement SHA has two successful protected push workflows and no failed run.
 
 The refresh does not approve a promotion. Its exact PR head must pass the local
 structure tests, live remote verification, synthetic merge validation, and
