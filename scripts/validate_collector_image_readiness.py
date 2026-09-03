@@ -117,6 +117,13 @@ def main() -> None:
     ):
         if token not in dockerfile:
             fail(f"Collector build boundary missing: {token}")
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+    for source in (
+        "!codestra/deploy/entrypoint.go",
+        "!codestra/deploy/entrypoint_test.go",
+    ):
+        if source not in dockerignore:
+            fail(f"Collector entrypoint excluded from build context: {source[1:]}")
     healthcheck = (ROOT / "codestra/deploy/healthcheck.go").read_text(encoding="utf-8")
     if "http://127.0.0.1:13133/" not in healthcheck or "Getenv" in healthcheck:
         fail("Collector image health probe must be bounded to loopback")

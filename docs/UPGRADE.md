@@ -20,6 +20,8 @@ The Collector entrypoint and control API require it to equal the runtime source
 SHA, and require the runtime digest to equal the canonical full image identity.
 Any missing or conflicting value fails before the Collector handoff or API
 configuration load.
+The root build-context allowlist includes both Collector wrapper source and
+test files; removing either entry makes the exact-head image build fail closed.
 Exact-head image CI also starts both images without host networking, checks the
 Collector loopback health extension, and checks both control API liveness and
 readiness with a disposable mounted credential.
