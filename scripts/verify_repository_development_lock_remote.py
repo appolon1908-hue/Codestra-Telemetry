@@ -99,22 +99,56 @@ def postgres_supersession_matches(
     )
 
 
-def verify_telemetry_lock_commit(locked_sha: str, remote_sha: str) -> None:
-    head = command(["git", "rev-parse", "HEAD"]).stdout.strip()
-    if remote_sha not in {locked_sha, head}:
-        fail("Telemetry development moved outside the reviewed lock change")
-    if head == locked_sha:
-        return
-    if command(["git", "merge-base", "--is-ancestor", locked_sha, head], allow_failure=True).returncode != 0:
-        fail("Telemetry lock source is not an ancestor of the exact validation head")
-    changed = set(
+def commit_is_ancestor(base: str, head: str) -> bool:
+    """Return whether ``base`` is an ancestor of ``head`` in the exact checkout."""
+
+    return (
+        command(
+            ["git", "merge-base", "--is-ancestor", base, head],
+            allow_failure=True,
+        ).returncode
+        == 0
+    )
+
+
+def changed_paths(base: str, head: str) -> set[str]:
+    """Return the exact changed path set between two known commits."""
+
+    if base == head:
+        return set()
+    return set(
         filter(
             None,
-            command(["git", "diff", "--name-only", f"{locked_sha}..{head}"]).stdout.splitlines(),
+            command(["git", "diff", "--name-only", f"{base}..{head}"])
+            .stdout.splitlines(),
         )
     )
-    if not changed or not changed <= ALLOWED_TELEMETRY_LOCK_CHANGES:
+
+
+def require_lock_only_transition(base: str, head: str, label: str) -> None:
+    """Require an ancestry-preserving transition limited to lock-governance files."""
+
+    if not commit_is_ancestor(base, head):
+        fail(f"Telemetry {label} is not an ancestry-preserving transition")
+    changed = changed_paths(base, head)
+    if not changed <= ALLOWED_TELEMETRY_LOCK_CHANGES:
         fail(f"Telemetry changed outside the source-lock boundary: {sorted(changed)}")
+
+
+def verify_telemetry_lock_commit(locked_sha: str, remote_sha: str) -> None:
+    """Validate lock refreshes and protected promotion merge commits fail closed.
+
+    ``locked_sha`` is the source snapshot recorded inside the lock. ``remote_sha``
+    is the current protected development head. The local ``HEAD`` can be either a
+    lock-refresh branch, the protected development head, or a merge commit on a
+    later promotion branch. Every transition must preserve ancestry and may
+    change only the established lock-governance file allowlist. A normal branch
+    promotion can therefore use an empty tree diff without weakening the lock.
+    """
+
+    head = command(["git", "rev-parse", "HEAD"]).stdout.strip()
+    require_lock_only_transition(locked_sha, remote_sha, "locked-to-development transition")
+    require_lock_only_transition(remote_sha, head, "development-to-validation transition")
 
 
 def main() -> None:
