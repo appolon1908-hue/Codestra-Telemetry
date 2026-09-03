@@ -1,0 +1,12 @@
+*
+!go.mod
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!config/
+!config/services.json
+!openapi.json
+!release/
+!release/image-build.v1.json
+!release/runtime-base.lock.json

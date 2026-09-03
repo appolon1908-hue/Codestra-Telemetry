@@ -1,0 +1,108 @@
+name: codestra-opentelemetry-collector
+
+services:
+  otel-collector:
+    image: ${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}
+    pull_policy: never
+    profiles:
+      - candidate-after-approval
+    restart: "no"
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    stop_grace_period: 60s
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    environment:
+      CODESTRA_BUSINESS: platform
+      CODESTRA_ENVIRONMENT: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
+      CODESTRA_REGION: ${CODESTRA_REGION:?CODESTRA_REGION is required}
+      CODESTRA_SERVER: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
+      CODESTRA_SOURCE_SHA: ${CODESTRA_SOURCE_SHA:?exact protected source SHA is required}
+      CODESTRA_IMAGE_DIGEST: ${CODESTRA_IMAGE_DIGEST:?exact image digest is required}
+      CODESTRA_OTELCOL_IMAGE: ${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}
+      CODESTRA_OTLP_BIND_HOST: otel-collector-platform-ingress
+      CODESTRA_METRICS_BIND_HOST: otel-collector-platform-metrics
+      TEMPO_OTLP_GRPC_ENDPOINT: ${TEMPO_OTLP_GRPC_ENDPOINT:-tempo:4317}
+      TEMPO_TLS_SERVER_NAME: ${TEMPO_TLS_SERVER_NAME:-temp.codestra.media}
+      LOKI_OTLP_HTTP_ENDPOINT: ${LOKI_OTLP_HTTP_ENDPOINT:-https://loki:3100/otlp}
+      LOKI_TLS_SERVER_NAME: ${LOKI_TLS_SERVER_NAME:-loki.codestra.media}
+      GOMEMLIMIT: ${OTEL_COLLECTOR_GOMEMLIMIT:-768MiB}
+    secrets:
+      - otelcol_server_cert
+      - otelcol_server_key
+      - otelcol_client_ca
+      - otelcol_backend_ca
+    expose:
+      - "4317"
+      - "4318"
+      - "8888"
+      - "8889"
+      - "13133"
+    volumes:
+      - otelcol-storage:/var/lib/otelcol
+    networks:
+      codestra-business-telemetry:
+        aliases: [otel-collector-platform-ingress]
+      codestra-observability:
+        aliases: [otel-collector-platform-metrics]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    healthcheck:
+      test: [CMD, /otelcol-healthcheck]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: 25m
+        max-file: "3"
+    labels:
+      codestra.business: platform
+      codestra.application: observability
+      codestra.service: opentelemetry-collector
+      codestra.environment: ${CODESTRA_ENVIRONMENT:?CODESTRA_ENVIRONMENT is required}
+      codestra.region: ${CODESTRA_REGION:?CODESTRA_REGION is required}
+      codestra.server: ${CODESTRA_SERVER:?CODESTRA_SERVER is required}
+      codestra.deployment: ${CODESTRA_OTELCOL_DEPLOYMENT_ID:?immutable deployment ID is required}
+      codestra.telemetry.business-identity: repository-controlled
+      codestra.telemetry.ingress-mtls: required
+    deploy:
+      resources:
+        limits:
+          cpus: ${OTEL_COLLECTOR_CPU_LIMIT:-2.0}
+          memory: ${OTEL_COLLECTOR_MEMORY_LIMIT:-1g}
+          pids: 512
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+networks:
+  codestra-business-telemetry:
+    external: true
+    name: ${CODESTRA_BUSINESS_TELEMETRY_NETWORK:-codestra-telemetry-platform}
+  codestra-observability:
+    external: true
+    name: ${CODESTRA_OBSERVABILITY_NETWORK:-codestra-observability}
+
+volumes:
+  otelcol-storage:
+    external: true
+    name: codestra-platform-otelcol-storage
+
+secrets:
+  otelcol_server_cert:
+    file: ${OTELCOL_SERVER_CERT_FILE_SOURCE:?mounted Collector server certificate is required}
+  otelcol_server_key:
+    file: ${OTELCOL_SERVER_KEY_FILE_SOURCE:?mounted Collector server key is required}
+  otelcol_client_ca:
+    file: ${OTELCOL_CLIENT_CA_FILE_SOURCE:?mounted Collector client CA is required}
+  otelcol_backend_ca:
+    file: ${OTELCOL_BACKEND_CA_FILE_SOURCE:?mounted Collector backend CA is required}

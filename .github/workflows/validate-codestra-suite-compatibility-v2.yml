@@ -1,0 +1,53 @@
+name: Validate Codestra fourteen-authority suite compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'codestra/suite-contract.v2.json'
+      - 'codestra/docs/SUITE-COMPATIBILITY-GATE-V2.md'
+      - 'scripts/validate_codestra_suite_contract_v2.py'
+      - '.github/workflows/validate-codestra-suite-compatibility-v2.yml'
+  push:
+    branches: [development, test, staging, production, main]
+    paths:
+      - 'codestra/suite-contract.v2.json'
+      - 'codestra/docs/SUITE-COMPATIBILITY-GATE-V2.md'
+      - 'scripts/validate_codestra_suite_contract_v2.py'
+      - '.github/workflows/validate-codestra-suite-compatibility-v2.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codestra-suite-v2-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Validate fourteen authorities, flows, isolation, and source-only milestone
+        env:
+          PYTHONPYCACHEPREFIX: /tmp/codestra-suite-v2-pycache
+        run: |
+          python -m py_compile scripts/validate_codestra_suite_contract_v2.py
+          python scripts/validate_codestra_suite_contract_v2.py
+
+      - name: Confirm source-only safety state
+        run: |
+          python - <<'PY'
+          import json
+          contract = json.load(open('codestra/suite-contract.v2.json', encoding='utf-8'))
+          assert contract['authorityCount'] == 14
+          assert contract['milestone']['achieved'] is False
+          assert all(value is False for value in contract['runtimeActivation'].values())
+          PY

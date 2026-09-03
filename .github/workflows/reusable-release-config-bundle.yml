@@ -1,0 +1,229 @@
+name: Reusable signed configuration release
+
+on:
+  workflow_call:
+    inputs:
+      component_id:
+        description: Lowercase canonical component identifier
+        required: true
+        type: string
+      release_tag:
+        description: Human release label codestra-COMPONENT-vX.Y.Z
+        required: true
+        type: string
+      protected_source_sha:
+        description: Exact caller production head to package
+        required: true
+        type: string
+      calling_workflow_path:
+        description: Caller workflow filename used for keyless identity verification
+        required: true
+        type: string
+      builder_script_path:
+        description: Repository-relative deterministic bundle builder
+        required: false
+        default: scripts/build_config_bundle.py
+        type: string
+      runtime_lock_path:
+        description: Repository-relative runtime image lock
+        required: false
+        default: codestra/release/runtime-image.lock.json
+        type: string
+      config_manifest_path:
+        description: Repository-relative configuration bundle manifest
+        required: false
+        default: codestra/release/config-bundle.manifest.json
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release-config:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ inputs.protected_source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fail closed on caller input and protected lineage
+        env:
+          COMPONENT_ID: ${{ inputs.component_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+          CALLING_WORKFLOW_PATH: ${{ inputs.calling_workflow_path }}
+          BUILDER_SCRIPT: ${{ inputs.builder_script_path }}
+          RUNTIME_LOCK: ${{ inputs.runtime_lock_path }}
+          CONFIG_MANIFEST: ${{ inputs.config_manifest_path }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$COMPONENT_ID" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+          [[ "$RELEASE_TAG" =~ ^codestra-${COMPONENT_ID}-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CALLING_WORKFLOW_PATH" =~ ^[A-Za-z0-9._-]+\.ya?ml$ ]]
+          test "$GITHUB_REF" = "refs/heads/production"
+          for path in "$BUILDER_SCRIPT" "$RUNTIME_LOCK" "$CONFIG_MANIFEST"; do
+            [[ "$path" =~ ^[A-Za-z0-9._/-]+$ ]]
+            [[ "$path" != /* && "$path" != *..* ]]
+            test -f "$path"
+            test ! -L "$path"
+            [[ "$(realpath -- "$path")" == "$GITHUB_WORKSPACE/"* ]]
+          done
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git fetch --no-tags origin production
+          test "$(git rev-parse origin/production)" = "$SOURCE_SHA"
+          python3 - "$COMPONENT_ID" "$RUNTIME_LOCK" "$CONFIG_MANIFEST" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+
+          component, lock_path, manifest_path = sys.argv[1:]
+          lock = json.loads(Path(lock_path).read_text())
+          manifest = json.loads(Path(manifest_path).read_text())
+          image = lock.get("image", "")
+          if not re.fullmatch(r"[a-z0-9./_-]+@sha256:[0-9a-f]{64}", image):
+              raise SystemExit("runtime lock image is not immutable")
+          if lock.get("productionActivation") is not False:
+              raise SystemExit("runtime lock may not activate production")
+          if manifest.get("component") != component:
+              raise SystemExit("configuration manifest component mismatch")
+          if manifest.get("productionActivation") is not False:
+              raise SystemExit("configuration manifest may not activate production")
+          PY
+      - name: Install checksum-verified release tools
+        run: |
+          set -Eeuo pipefail
+          install_tool() {
+            url="$1" expected="$2" binary="$3"
+            archive="${RUNNER_TEMP}/$(basename "$url")"
+            curl --fail --silent --show-error --location "$url" --output "$archive"
+            echo "$expected  $archive" | sha256sum --check -
+            tar -xzf "$archive" -C "$RUNNER_TEMP" "$binary"
+            install -m 0755 "${RUNNER_TEMP}/${binary}" "${RUNNER_TEMP}/bin/${binary}"
+          }
+          mkdir -p "${RUNNER_TEMP}/bin"
+          install_tool \
+            https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_amd64.tar.gz \
+            8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3 syft
+          install_tool \
+            https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz \
+            2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a trivy
+          install_tool \
+            https://github.com/oras-project/oras/releases/download/v1.3.4/oras_1.3.4_linux_amd64.tar.gz \
+            f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454 oras
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        with:
+          cosign-release: v3.1.3
+      - name: Build, inventory and scan the exact candidate
+        env:
+          COMPONENT_ID: ${{ inputs.component_id }}
+          BUILDER_SCRIPT: ${{ inputs.builder_script_path }}
+          RUNTIME_LOCK: ${{ inputs.runtime_lock_path }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist/config-root
+          archive="dist/${COMPONENT_ID}-config.tar.gz"
+          python3 "$BUILDER_SCRIPT" --output "$archive"
+          tar -xzf "$archive" -C dist/config-root
+          syft dir:dist/config-root -o "spdx-json=dist/${COMPONENT_ID}-config.spdx.json"
+          trivy fs --exit-code 1 --severity HIGH,CRITICAL --scanners vuln,secret,misconfig dist/config-root
+          runtime_image="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RUNTIME_LOCK")"
+          trivy image --exit-code 1 --severity HIGH,CRITICAL "$runtime_image"
+      - name: Publish immutable OCI configuration artifact
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPONENT_ID: ${{ inputs.component_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+          CONFIG_MANIFEST: ${{ inputs.config_manifest_path }}
+        run: |
+          set -Eeuo pipefail
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${repository_name,,}-config"
+          printf '%s' "$GH_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if oras manifest fetch "${registry}:${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "release tag already exists and may not be reassigned" >&2
+            exit 1
+          fi
+          output="$(oras push --format json "${registry}:${RELEASE_TAG}" \
+            --annotation "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation "org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --annotation "org.opencontainers.image.version=${RELEASE_TAG}" \
+            "dist/${COMPONENT_ID}-config.tar.gz:application/vnd.codestra.config.v1+tar" \
+            "dist/${COMPONENT_ID}-config.spdx.json:application/spdx+json" \
+            "${CONFIG_MANIFEST}:application/vnd.codestra.release.manifest.v1+json")"
+          digest="$(jq -r '.digest' <<<"$output")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "registry=${registry}" >> "$GITHUB_OUTPUT"
+          echo "identity=${registry}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          verification_root="${RUNNER_TEMP}/verified-config-artifact"
+          mkdir -p "$verification_root"
+          oras pull "${registry}@${digest}" --output "$verification_root"
+          cmp "dist/${COMPONENT_ID}-config.tar.gz" "$verification_root/dist/${COMPONENT_ID}-config.tar.gz"
+          cmp "dist/${COMPONENT_ID}-config.spdx.json" "$verification_root/dist/${COMPONENT_ID}-config.spdx.json"
+          cmp "$CONFIG_MANIFEST" "$verification_root/$CONFIG_MANIFEST"
+          oras manifest fetch "${registry}@${digest}" | jq -e \
+            --arg revision "$SOURCE_SHA" \
+            '.annotations["org.opencontainers.image.revision"] == $revision'
+      - name: Sign and verify the exact OCI digest
+        env:
+          IDENTITY: ${{ steps.publish.outputs.identity }}
+          CALLING_WORKFLOW_PATH: ${{ inputs.calling_workflow_path }}
+          COMPONENT_ID: ${{ inputs.component_id }}
+        run: |
+          set -Eeuo pipefail
+          cosign sign --yes "$IDENTITY"
+          cosign attest --yes --type spdxjson \
+            --predicate "dist/${COMPONENT_ID}-config.spdx.json" "$IDENTITY"
+          workflow_identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/${CALLING_WORKFLOW_PATH}@refs/heads/production"
+          cosign verify "$IDENTITY" \
+            --certificate-identity "$workflow_identity" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          cosign verify-attestation "$IDENTITY" --type spdxjson \
+            --certificate-identity "$workflow_identity" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-name: ${{ steps.publish.outputs.registry }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+      - name: Verify published SLSA provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IDENTITY: ${{ steps.publish.outputs.identity }}
+        run: gh attestation verify "oci://${IDENTITY}" --repo "$GITHUB_REPOSITORY"
+      - name: Record sanitized release evidence
+        env:
+          COMPONENT_ID: ${{ inputs.component_id }}
+          IDENTITY: ${{ steps.publish.outputs.identity }}
+          SOURCE_SHA: ${{ inputs.protected_source_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RUNTIME_LOCK: ${{ inputs.runtime_lock_path }}
+        run: |
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg component "$COMPONENT_ID" \
+            --arg sourceSha "$SOURCE_SHA" \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg artifact "$IDENTITY" \
+            --arg runtimeImage "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RUNTIME_LOCK")" \
+            --arg configSha256 "$(sha256sum "dist/${COMPONENT_ID}-config.tar.gz" | cut -d' ' -f1)" \
+            --arg sbomSha256 "$(sha256sum "dist/${COMPONENT_ID}-config.spdx.json" | cut -d' ' -f1)" \
+            '{schemaVersion:"1.0.0", repository:$repository, component:$component, sourceSha:$sourceSha, releaseTag:$releaseTag, runtimeImage:$runtimeImage, configArtifact:$artifact, configSha256:$configSha256, sbomSha256:$sbomSha256, signatureVerified:true, provenanceVerified:true, vulnerabilityGate:"PASS", productionActivated:false}' \
+            > dist/release-evidence.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: configuration-release-evidence-${{ inputs.component_id }}-${{ inputs.protected_source_sha }}
+          path: |
+            dist/${{ inputs.component_id }}-config.tar.gz
+            dist/${{ inputs.component_id }}-config.spdx.json
+            dist/release-evidence.json
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,58 @@
+name: codestra-observability-control-api
+
+services:
+  control-api:
+    image: ${CODESTRA_CONTROL_API_IMAGE:?immutable control API image with sha256 digest is required}
+    pull_policy: never
+    profiles:
+      - candidate-after-approval
+    restart: "no"
+    user: "65532:65532"
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    environment:
+      CODESTRA_CONTROL_API_AUTH_MODE: required
+      CODESTRA_CONTROL_API_BEARER_TOKEN_FILE: /run/secrets/control_api_bearer_token
+      CODESTRA_CONTROL_API_LISTEN_ADDRESS: 0.0.0.0:8090
+      CODESTRA_SOURCE_SHA: ${CODESTRA_SOURCE_SHA:?exact protected source SHA is required}
+      CODESTRA_IMAGE_DIGEST: ${CODESTRA_IMAGE_DIGEST:?exact image digest is required}
+      CODESTRA_CONTROL_API_IMAGE: ${CODESTRA_CONTROL_API_IMAGE:?immutable control API image with sha256 digest is required}
+    secrets:
+      - control_api_bearer_token
+    expose:
+      - "8090"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    networks:
+      - codestra-observability
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/codestra-control-api-healthcheck
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+          pids: 128
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+
+networks:
+  codestra-observability:
+    external: true
+    name: ${CODESTRA_OBSERVABILITY_NETWORK:-codestra-observability}
+
+secrets:
+  control_api_bearer_token:
+    file: ${CODESTRA_CONTROL_API_BEARER_TOKEN_FILE_SOURCE:?mounted bearer-token file is required}

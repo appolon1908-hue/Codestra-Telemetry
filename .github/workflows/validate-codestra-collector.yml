@@ -1,0 +1,134 @@
+name: Validate Codestra OpenTelemetry Collector
+
+on:
+  pull_request:
+    paths:
+      - "codestra/**"
+      - "scripts/validate_codestra_collector.py"
+      - "scripts/validate_codestra_telemetry.py"
+      - "scripts/validate_collector_image_readiness.py"
+      - ".github/workflows/validate-codestra-collector.yml"
+  push:
+    branches: [development, test, staging, production, main]
+    paths:
+      - "codestra/**"
+      - "scripts/validate_codestra_collector.py"
+      - "scripts/validate_codestra_telemetry.py"
+      - "scripts/validate_collector_image_readiness.py"
+      - ".github/workflows/validate-codestra-collector.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codestra-collector-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+
+      - name: Install pinned corporate-validator dependency
+        run: python -m pip install --disable-pip-version-check --no-cache-dir PyYAML==6.0.3
+
+      - name: Run fail-closed corporate validator
+        env:
+          PYTHONPYCACHEPREFIX: /tmp/codestra-telemetry-pycache
+        run: |
+          python -m py_compile scripts/validate_codestra_collector.py scripts/validate_codestra_telemetry.py
+          python scripts/validate_codestra_collector.py
+          python scripts/validate_collector_image_readiness.py
+
+      - name: Download and verify official Collector Contrib validator
+        run: |
+          set -euo pipefail
+          version=0.159.0
+          base="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${version}"
+          asset="otelcol-contrib_${version}_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error --output "/tmp/${asset}" "${base}/${asset}"
+          printf '%s  %s\n' 9d589f6349f01179957a2052bc7307a99db2efc971e14e00575941a77122eaaf "/tmp/${asset}" | sha256sum --check
+          tar -xzf "/tmp/${asset}" -C /tmp otelcol-contrib
+          /tmp/otelcol-contrib --version
+
+      - name: Validate Collector configuration natively
+        env:
+          CODESTRA_BUSINESS: platform
+          CODESTRA_ENVIRONMENT: test
+          CODESTRA_REGION: ci
+          CODESTRA_SERVER: github-actions
+          TEMPO_OTLP_GRPC_ENDPOINT: tempo:4317
+          TEMPO_TLS_SERVER_NAME: temp.codestra.media
+          LOKI_OTLP_HTTP_ENDPOINT: https://loki:3100/otlp
+          LOKI_TLS_SERVER_NAME: loki.codestra.media
+        run: /tmp/otelcol-contrib validate --config codestra/collector.yaml
+
+      - name: Render and inspect private runtime authority
+        env:
+          CODESTRA_OTELCOL_IMAGE: ghcr.io/appolon1908-hue/codestra-telemetry-opentelemetry@sha256:2222222222222222222222222222222222222222222222222222222222222222
+          CODESTRA_SOURCE_SHA: "0000000000000000000000000000000000000000"
+          CODESTRA_IMAGE_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
+          CODESTRA_ENVIRONMENT: test
+          CODESTRA_REGION: ci
+          CODESTRA_SERVER: github-actions
+          CODESTRA_OTELCOL_DEPLOYMENT_ID: ci-immutable-deployment
+          CODESTRA_BUSINESS_TELEMETRY_NETWORK: codestra-telemetry-platform
+          CODESTRA_OBSERVABILITY_NETWORK: codestra-observability
+          OTELCOL_SERVER_CERT_FILE_SOURCE: /tmp/otelcol-server-cert-ci
+          OTELCOL_SERVER_KEY_FILE_SOURCE: /tmp/otelcol-server-key-ci
+          OTELCOL_CLIENT_CA_FILE_SOURCE: /tmp/otelcol-client-ca-ci
+          OTELCOL_BACKEND_CA_FILE_SOURCE: /tmp/otelcol-backend-ca-ci
+          OTEL_COLLECTOR_MEMORY_LIMIT: 1g
+          OTEL_COLLECTOR_CPU_LIMIT: "2.0"
+          OTEL_COLLECTOR_GOMEMLIMIT: 768MiB
+        run: |
+          docker compose --profile candidate-after-approval -f codestra/compose.candidate.yaml config --format json > /tmp/compose.json
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          config = json.loads(Path('/tmp/compose.json').read_text())
+          service = config['services']['otel-collector']
+          immutable = re.compile(r'^[^@\s]+@sha256:[0-9a-f]{64}$')
+          assert immutable.fullmatch(service['image'])
+          assert 'build' not in service
+          assert service['environment']['CODESTRA_BUSINESS'] == 'platform'
+          assert service['environment']['CODESTRA_SOURCE_SHA'] == '0000000000000000000000000000000000000000'
+          assert service['environment']['CODESTRA_IMAGE_DIGEST'].startswith('sha256:')
+          assert service['user'] == '10001:10001'
+          assert service['read_only'] is True
+          assert service['cap_drop'] == ['ALL']
+          assert not service.get('ports')
+          assert set(service['expose']) == {'4317', '4318', '8888', '8889', '13133'}
+          assert set(service['networks']) == {'codestra-business-telemetry', 'codestra-observability'}
+          secret_sources = {
+              entry if isinstance(entry, str) else entry.get('source')
+              for entry in service['secrets']
+          }
+          assert secret_sources == {
+              'otelcol_server_cert',
+              'otelcol_server_key',
+              'otelcol_client_ca',
+              'otelcol_backend_ca',
+          }
+          assert config['networks']['codestra-business-telemetry']['external'] is True
+          assert config['networks']['codestra-observability']['external'] is True
+          assert config['volumes']['otelcol-storage']['external'] is True
+          assert config['volumes']['otelcol-storage']['name'] == 'codestra-platform-otelcol-storage'
+          assert service['labels']['codestra.business'] == 'platform'
+          assert not any('/etc/otelcol-contrib/config.yaml' in str(item) for item in service.get('volumes', []))
+          PY
+
+      - name: Confirm source-only safety state
+        run: |
+          test "$(python -c 'import json; print(json.load(open("codestra/enterprise-profile.v1.json"))["status"])')" = "CONFIG_PREPARED_NOT_DEPLOYED"
+          ! grep -RInE --exclude='*.md' '(BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16})' codestra

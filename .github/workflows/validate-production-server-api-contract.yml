@@ -1,0 +1,146 @@
+name: Validate Codestra production server API contract
+
+on:
+  pull_request:
+    paths:
+      - codestra/collector.yaml
+      - codestra/compose.candidate.yaml
+      - codestra/deploy/entrypoint.go
+      - docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md
+      - docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md
+      - .github/workflows/validate-production-server-api-contract.yml
+  push:
+    branches: [development, test, staging, production, main]
+    paths:
+      - codestra/collector.yaml
+      - codestra/compose.candidate.yaml
+      - codestra/deploy/entrypoint.go
+      - docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md
+      - docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md
+      - .github/workflows/validate-production-server-api-contract.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telemetry-production-api-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13'
+      - name: Validate source-only production contract and server handoff
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          contract = Path('docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md').read_text(encoding='utf-8')
+          contract_required = [
+              'appolon1908-hue/Codestra-Telemetry', '37.27.128.39',
+              'SOURCE_CONTRACT_PREPARED_NOT_DEPLOYED', 'OTLP/gRPC', ':4317',
+              ':4318 POST /v1/traces', ':4318 POST /v1/metrics', ':4318 POST /v1/logs',
+              ':13133/', ':8888/metrics', ':8889/metrics',
+              'CALLER_CODESTRA_BUSINESS_FORMS_SANITIZED=PASS',
+              'OTLP_HTTP_4318=PASS', 'SELF_METRICS_8888=PASS',
+              'APPLICATION_METRICS_8889=PASS', 'HEALTH_13133=PASS',
+              'AUTHORITATIVE_CODESTRA_DOT_BUSINESS_OVERWRITTEN=PASS',
+              'CALLER_CODESTRA_BUSINESS_UNDERSCORE_REMOVED=PASS',
+              'CALLER_BUSINESS_OVERRIDE_DENIED=PASS', 'QUEUE_AND_BACKPRESSURE=PASS',
+              'UNEXPECTED_404=0', 'SOURCE_RUNTIME_DRIFT=0',
+              'This document does not deploy a collector',
+          ]
+          missing = [value for value in contract_required if value not in contract]
+          assert not missing, f'missing production API contract controls: {missing}'
+
+          collector = Path('codestra/collector.yaml').read_text(encoding='utf-8')
+          source_required = [
+              'endpoint: ${env:CODESTRA_METRICS_BIND_HOST}:13133',
+              'endpoint: ${env:CODESTRA_OTLP_BIND_HOST}:4317',
+              'endpoint: ${env:CODESTRA_OTLP_BIND_HOST}:4318',
+              'endpoint: ${env:CODESTRA_METRICS_BIND_HOST}:8889',
+              'targets: ["${env:CODESTRA_METRICS_BIND_HOST}:8888"]',
+              'port: 8888',
+              'codestra\\.business|codestra_business|tenant',
+              'codestra(\\\\.business|_business)',
+              'set(attributes["codestra_business"], resource.attributes["codestra.business"])',
+          ]
+          missing = [value for value in source_required if value not in collector]
+          assert not missing, f'collector source omits production identity/port control: {missing}'
+          authoritative = collector.find('- key: codestra.business')
+          delete_both = collector.find('codestra\\.business|codestra_business|tenant')
+          assert delete_both >= 0 and authoritative > delete_both, (
+              'caller business spellings must be deleted before the authoritative dotted key is installed'
+          )
+
+          wildcard_listeners = [
+              f'0.0.0.0:{port}' for port in (13133, 4317, 4318, 8888, 8889)
+          ]
+          present = [value for value in wildcard_listeners if value in collector]
+          assert not present, f'collector contains forbidden wildcard listeners: {present}'
+
+          compose = Path('codestra/compose.candidate.yaml').read_text(encoding='utf-8')
+          topology_required = [
+              'CODESTRA_OTLP_BIND_HOST: otel-collector-platform-ingress',
+              'CODESTRA_METRICS_BIND_HOST: otel-collector-platform-metrics',
+              'aliases: [otel-collector-platform-ingress]',
+              'aliases: [otel-collector-platform-metrics]',
+          ]
+          missing = [value for value in topology_required if value not in compose]
+          assert not missing, f'Compose omits isolated listener topology: {missing}'
+          assert 'aliases: [otel-collector]' not in compose, 'generic collector alias is prohibited'
+
+          entrypoint = Path('codestra/deploy/entrypoint.go').read_text(encoding='utf-8')
+          entrypoint_required = [
+              'CODESTRA_OTLP_BIND_HOST', 'CODESTRA_METRICS_BIND_HOST',
+              'otel-collector-platform-ingress', 'otel-collector-platform-metrics',
+          ]
+          missing = [value for value in entrypoint_required if value not in entrypoint]
+          assert not missing, f'Collector startup omits topology validation: {missing}'
+
+          handoff = Path('docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md').read_text(encoding='utf-8')
+          handoff_required = [
+              'CENTRAL_STACK_INSTALL_HOST=37.27.128.39',
+              'CORE_APPLICATION_HOST=65.109.65.169',
+              'CENTRAL_AUTHORITY_ON_CORE_HOST=NO',
+              'SSH_CONFIGURATION_CHANGES_AUTHORIZED=NO',
+              'ADMIN_BYPASS_AUTHORIZED=NO',
+              'appolon1908-hue/Codestra-Loki',
+              'appolon1908-hue/Codestra-Prometheus',
+              'appolon1908-hue/Codestra-Grafana-',
+              'appolon1908-hue/Codestra-Tempo',
+              'appolon1908-hue/Codestra-Telemetry',
+              'appolon1908-hue/Codestra-Alloy',
+              'appolon1908-hue/Codestra-Node-Exporter',
+              'appolon1908-hue/Codestra-cAdvisor',
+              'appolon1908-hue/Codestra-Redis-Exporter',
+              'appolon1908-hue/Codestra-Postgres-Exporter',
+              'appolon1908-hue/Codestra-Blackbox-Exporter',
+              'appolon1908-hue/Codestra-Alertmanager',
+              'appolon1908-hue/Superset',
+              'appolon1908-hue/Codestra-OpenBao',
+              'EXACT_HEAD_CI=PASS',
+              'SERVER_INSTALL_AUTHORIZED=YES',
+              'CVE-2026-84304',
+              'GRPC_GO_VERSION>=1.83.1',
+              'Never patch production in place and leave GitHub behind',
+          ]
+          missing = [value for value in handoff_required if value not in handoff]
+          assert not missing, f'missing cross-suite handoff controls: {missing}'
+          assert handoff.count('appolon1908-hue/') == 14, 'handoff must list exactly fourteen product repositories'
+
+          forbidden = [
+              'ADMIN_BYPASS_AUTHORIZED=YES',
+              'SSH_CONFIGURATION_CHANGES_AUTHORIZED=YES',
+              ':latest',
+              'OPENBAO_PRODUCTION_DEPLOYMENT=YES',
+          ]
+          present = [value for value in forbidden if value in contract or value in handoff]
+          assert not present, f'forbidden production contract claims: {present}'
+          print('CODESTRA_TELEMETRY_PRODUCTION_API_AND_HANDOFF_CONTRACT=PASS')
+          PY

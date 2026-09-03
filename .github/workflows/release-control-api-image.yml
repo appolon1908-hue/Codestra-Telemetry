@@ -1,0 +1,28 @@
+name: Release signed control API image
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable label codestra-control-api-vX.Y.Z
+        required: true
+        type: string
+      protected_source_sha:
+        description: Exact protected production commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    uses: appolon1908-hue/Codestra-Telemetry/.github/workflows/reusable-release-image.yml@5adfee5efbc583b26aaa978e2e4508196d7e0bdc
+    with:
+      image_id: control-api
+      release_tag: ${{ inputs.release_tag }}
+      protected_source_sha: ${{ inputs.protected_source_sha }}
+      build_manifest_path: codestra/control-api/release/image-build.v1.json

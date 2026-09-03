@@ -1,0 +1,183 @@
+{
+  "authorityRole": "telemetry-ingress-normalization-redaction-routing-authority",
+  "canonicalHostname": "otel.codestra.media",
+  "component": "opentelemetry",
+  "contractId": "codestra.observability.opentelemetry.v1",
+  "correlation": {
+    "indexedFields": [
+      "codestra_business",
+      "application",
+      "service",
+      "environment",
+      "server",
+      "region",
+      "deployment"
+    ],
+    "propagateHeaders": [
+      "X-Correlation-ID",
+      "traceparent"
+    ],
+    "protectedNonIndexedFields": [
+      "request_id",
+      "trace_id",
+      "tenant_id"
+    ],
+    "structuredFields": [
+      "correlation_id",
+      "request_id",
+      "trace_id",
+      "tenant_id"
+    ]
+  },
+  "deploymentClass": "agent",
+  "displayName": "OpenTelemetry Collector",
+  "integrations": [
+    {
+      "direction": "outbound",
+      "mutating": false,
+      "peer": "prometheus",
+      "protocol": "prometheus-scrape",
+      "purpose": "expose sanitized application metrics",
+      "signal": "metrics"
+    },
+    {
+      "direction": "outbound",
+      "mutating": false,
+      "peer": "loki",
+      "protocol": "otlp-http",
+      "purpose": "export sanitized application logs",
+      "signal": "logs"
+    },
+    {
+      "direction": "outbound",
+      "mutating": false,
+      "peer": "tempo",
+      "protocol": "otlp-grpc",
+      "purpose": "export redacted sampled traces",
+      "signal": "traces"
+    },
+    {
+      "direction": "inbound",
+      "mutating": false,
+      "peer": "alloy",
+      "protocol": "otlp",
+      "purpose": "receive host and service telemetry when Alloy delegates processing",
+      "signal": "metrics-logs-traces"
+    }
+  ],
+  "managementReadback": {
+    "allowsMutation": false,
+    "controlApiOwner": "appolon1908-hue/Codestra-Telemetry",
+    "exposesSecretValues": false,
+    "healthOperationId": "health",
+    "readinessOperationId": "readiness",
+    "registryServiceId": "opentelemetry",
+    "responseBodyPolicy": "discard"
+  },
+  "nativeApi": {
+    "authentication": {
+      "callerControlledBusinessAllowed": false,
+      "credentialSource": "none",
+      "requiredScopes": [],
+      "tenantHeader": null,
+      "transport": "private_network"
+    },
+    "baseUrlEnvironment": "CODESTRA_OPENTELEMETRY_URL",
+    "operations": [
+      {
+        "acceptedStatuses": [200],
+        "access": "read_only",
+        "category": "health",
+        "controlPlaneProxyAllowed": false,
+        "id": "health",
+        "method": "GET",
+        "path": "/",
+        "responseBodyPolicy": "discard",
+        "timeoutMs": 3000
+      },
+      {
+        "acceptedStatuses": [200],
+        "access": "read_only",
+        "category": "readiness",
+        "controlPlaneProxyAllowed": false,
+        "id": "readiness",
+        "method": "GET",
+        "path": "/",
+        "responseBodyPolicy": "discard",
+        "timeoutMs": 3000
+      },
+      {
+        "acceptedStatuses": [200],
+        "access": "read_only",
+        "category": "metrics",
+        "controlPlaneProxyAllowed": false,
+        "id": "metrics",
+        "method": "GET",
+        "path": "/metrics",
+        "responseBodyPolicy": "discard",
+        "timeoutMs": 3000
+      },
+      {
+        "acceptedStatuses": [200],
+        "access": "ingest",
+        "category": "ingest",
+        "controlPlaneProxyAllowed": false,
+        "id": "otlp-traces",
+        "method": "POST",
+        "path": "/v1/traces",
+        "responseBodyPolicy": "native",
+        "timeoutMs": 3000
+      },
+      {
+        "acceptedStatuses": [200],
+        "access": "ingest",
+        "category": "ingest",
+        "controlPlaneProxyAllowed": false,
+        "id": "otlp-metrics",
+        "method": "POST",
+        "path": "/v1/metrics",
+        "responseBodyPolicy": "native",
+        "timeoutMs": 3000
+      },
+      {
+        "acceptedStatuses": [200],
+        "access": "ingest",
+        "category": "ingest",
+        "controlPlaneProxyAllowed": false,
+        "id": "otlp-logs",
+        "method": "POST",
+        "path": "/v1/logs",
+        "responseBodyPolicy": "native",
+        "timeoutMs": 3000
+      }
+    ]
+  },
+  "nativeExposure": "internal_private",
+  "release": {
+    "imageDigestEnvironment": "CODESTRA_OPENTELEMETRY_IMAGE_DIGEST",
+    "immutableImageRequired": true,
+    "sourceRevisionEnvironment": "CODESTRA_OPENTELEMETRY_SOURCE_REVISION"
+  },
+  "repository": "appolon1908-hue/Codestra-Telemetry",
+  "safety": {
+    "anonymousManagementAccessAllowed": false,
+    "callerControlledBusinessAllowed": false,
+    "crossBusinessDefaultAllowed": false,
+    "insecureTlsVerificationAllowed": false,
+    "mutationProxyEnabled": false,
+    "nativeApiProxyEnabled": false,
+    "runtimeActivationAuthorized": false,
+    "secretValueReadbackEnabled": false
+  },
+  "schemaAuthority": {
+    "path": "codestra/api/service-contract.schema.json",
+    "repository": "appolon1908-hue/Codestra-Telemetry",
+    "sourceRevision": "ed89242841ccab5b0ee0304da7ba21ba70cafc06",
+    "version": "1.0.0"
+  },
+  "schemaVersion": "1.0.0",
+  "signals": {
+    "consumes": ["metrics-logs-traces"],
+    "produces": ["metrics", "logs", "traces"]
+  }
+}
