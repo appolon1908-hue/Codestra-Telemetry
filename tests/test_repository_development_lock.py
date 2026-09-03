@@ -141,10 +141,15 @@ class RepositoryDevelopmentLockTest(unittest.TestCase):
         ).read_text()
         for statement in (
             'HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}',
+            'BASE_BRANCH: ${{ github.event.pull_request.base.ref }}',
             '"$HEAD_BRANCH" =~ ^(test|staging|production|main)$',
+            '"$BASE_BRANCH" == "development"',
             'remote_development="$(gh api "repos/${GITHUB_REPOSITORY}/branches/development" --jq',
+            'test "$BASE_SHA" = "$remote_development"',
+            'git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"',
             'git rev-parse "${HEAD_SHA}^{tree}"',
             'git rev-parse "${remote_development}^{tree}"',
+            'git checkout --detach "$BASE_SHA"',
             'git checkout --detach "$remote_development"',
             'git checkout --detach "$HEAD_SHA"',
             'PROTECTED_BRANCH: ${{ github.ref_name }}',
