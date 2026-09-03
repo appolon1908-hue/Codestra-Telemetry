@@ -22,6 +22,8 @@ Any missing or conflicting value fails before the Collector handoff or API
 configuration load.
 The root build-context allowlist includes both Collector wrapper source and
 test files; removing either entry makes the exact-head image build fail closed.
+Release manifests are parsed with duplicate-key rejection so a later field
+cannot silently override the reviewed source-embedding contract.
 Exact-head image CI also starts both images without host networking, checks the
 Collector loopback health extension, and checks both control API liveness and
 readiness with a disposable mounted credential.

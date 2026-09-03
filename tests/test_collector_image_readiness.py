@@ -14,9 +14,20 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 RUNTIME_IDENTITY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNTIME_IDENTITY)
+READINESS_SPEC = importlib.util.spec_from_file_location(
+    "collector_image_readiness",
+    ROOT / "scripts/validate_collector_image_readiness.py",
+)
+assert READINESS_SPEC and READINESS_SPEC.loader
+READINESS = importlib.util.module_from_spec(READINESS_SPEC)
+READINESS_SPEC.loader.exec_module(READINESS)
 
 
 class CollectorRuntimeIdentityTest(unittest.TestCase):
+    def test_release_manifest_parser_rejects_duplicate_keys(self) -> None:
+        with self.assertRaises(SystemExit):
+            READINESS.unique_object([("embedSourceRevision", True), ("embedSourceRevision", False)])
+
     def test_image_starts_through_fail_closed_identity_entrypoint(self) -> None:
         dockerfile = (ROOT / "codestra/deploy/Dockerfile").read_text()
         entrypoint = (ROOT / "codestra/deploy/entrypoint.go").read_text()

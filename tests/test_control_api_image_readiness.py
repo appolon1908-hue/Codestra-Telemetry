@@ -13,9 +13,20 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 RUNTIME_IDENTITY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNTIME_IDENTITY)
+READINESS_SPEC = importlib.util.spec_from_file_location(
+    "control_api_image_readiness",
+    ROOT / "scripts/validate_control_api_image_readiness.py",
+)
+assert READINESS_SPEC and READINESS_SPEC.loader
+READINESS = importlib.util.module_from_spec(READINESS_SPEC)
+READINESS_SPEC.loader.exec_module(READINESS)
 
 
 class RuntimeIdentityTest(unittest.TestCase):
+    def test_release_manifest_parser_rejects_duplicate_keys(self) -> None:
+        with self.assertRaises(SystemExit):
+            READINESS.unique_object([("embedSourceRevision", True), ("embedSourceRevision", False)])
+
     def test_server_validates_embedded_identity_before_configuration(self) -> None:
         main = (ROOT / "codestra/control-api/cmd/codestra-observability-api/main.go").read_text()
         identity = (ROOT / "codestra/control-api/internal/runtimeidentity/identity.go").read_text()

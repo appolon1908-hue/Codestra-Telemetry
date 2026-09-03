@@ -39,8 +39,20 @@ def fail(message: str) -> None:
     raise SystemExit(f"ERROR: {message}")
 
 
+def unique_object(pairs: list[tuple[str, object]]) -> dict:
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            fail(f"duplicate JSON key: {key}")
+        value[key] = item
+    return value
+
+
 def load(path: str) -> dict:
-    value = json.loads((ROOT / path).read_text(encoding="utf-8"))
+    value = json.loads(
+        (ROOT / path).read_text(encoding="utf-8"),
+        object_pairs_hook=unique_object,
+    )
     if not isinstance(value, dict):
         fail(f"{path} must contain an object")
     return value
