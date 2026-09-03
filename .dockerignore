@@ -5,6 +5,8 @@ codestra/*
 !codestra/collector.yaml
 !codestra/deploy/
 !codestra/deploy/Dockerfile
+!codestra/deploy/entrypoint.go
+!codestra/deploy/entrypoint_test.go
 !codestra/deploy/healthcheck.go
 !codestra/release/
 !codestra/release/image-build.v1.json

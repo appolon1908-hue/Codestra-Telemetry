@@ -13,16 +13,18 @@ func main() {
 			return http.ErrUseLastResponse
 		},
 	}
-	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8090/healthz", nil)
-	if err != nil {
-		os.Exit(1)
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		os.Exit(1)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		os.Exit(1)
+	for _, path := range []string{"/healthz", "/readyz"} {
+		request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8090"+path, nil)
+		if err != nil {
+			os.Exit(1)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			os.Exit(1)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
 	}
 }

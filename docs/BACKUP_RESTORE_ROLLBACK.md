@@ -5,3 +5,9 @@ The control API is stateless. Before deployment, capture its current image diges
 The Collector's `codestra-platform-otelcol-storage` volume contains bounded exporter queues. Before changing it, capture the current image digest, embedded configuration checksum, volume identity, queue-health evidence, mounted TLS file paths without their contents, and an approved snapshot or restoration procedure. Never reuse this queue for another business identity.
 
 Rollback uses the previous approved digest without rebuilding, preserves all volumes, renders Compose first, and performs a controlled `docker compose up -d`. Collector rollback must prove the prior image can read and drain the preserved queue before the new digest is restored. Never use `docker compose down -v`.
+
+The rollback bundle must pair the prior protected source SHA with its canonical
+OCI repository and digest. Startup is intentionally denied when that runtime
+tuple differs from the source revision embedded in the prior image; bypassing
+the Collector entrypoint or control API identity check is not an approved
+rollback mechanism.

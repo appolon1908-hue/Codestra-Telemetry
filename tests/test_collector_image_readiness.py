@@ -14,9 +14,30 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 RUNTIME_IDENTITY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNTIME_IDENTITY)
+READINESS_SPEC = importlib.util.spec_from_file_location(
+    "collector_image_readiness",
+    ROOT / "scripts/validate_collector_image_readiness.py",
+)
+assert READINESS_SPEC and READINESS_SPEC.loader
+READINESS = importlib.util.module_from_spec(READINESS_SPEC)
+READINESS_SPEC.loader.exec_module(READINESS)
 
 
 class CollectorRuntimeIdentityTest(unittest.TestCase):
+    def test_release_manifest_parser_rejects_duplicate_keys(self) -> None:
+        with self.assertRaises(SystemExit):
+            READINESS.unique_object([("embedSourceRevision", True), ("embedSourceRevision", False)])
+
+    def test_image_starts_through_fail_closed_identity_entrypoint(self) -> None:
+        dockerfile = (ROOT / "codestra/deploy/Dockerfile").read_text()
+        entrypoint = (ROOT / "codestra/deploy/entrypoint.go").read_text()
+        dockerignore = (ROOT / ".dockerignore").read_text()
+        self.assertIn('ENTRYPOINT ["/codestra-otelcol-entrypoint"]', dockerfile)
+        self.assertIn('syscall.Exec("/otelcol-contrib"', entrypoint)
+        self.assertIn("embeddedSourcePath", entrypoint)
+        self.assertIn("!codestra/deploy/entrypoint.go", dockerignore)
+        self.assertIn("!codestra/deploy/entrypoint_test.go", dockerignore)
+
     def values(self, digest: str = "2" * 64) -> dict[str, str]:
         return {
             "CODESTRA_OTELCOL_IMAGE": (

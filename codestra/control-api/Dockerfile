@@ -2,8 +2,10 @@
 
 ARG GO_BUILDER_IMAGE
 ARG RUNTIME_IMAGE
+ARG CODESTRA_SOURCE_SHA
 
 FROM ${GO_BUILDER_IMAGE} AS build
+ARG CODESTRA_SOURCE_SHA
 WORKDIR /src
 COPY go.mod ./
 COPY cmd ./cmd
@@ -24,10 +26,12 @@ RUN install -d -m 0555 /out/rootfs/etc/codestra-observability /out/rootfs/usr/sh
     && install -m 0444 ./metadata/openapi.json /out/rootfs/etc/codestra-observability/openapi.json \
     && install -m 0444 ./metadata/image-build.v1.json /out/rootfs/usr/share/codestra/image-build.v1.json \
     && install -m 0444 ./metadata/runtime-base.lock.json /out/rootfs/usr/share/codestra/runtime-base.lock.json
+RUN test "${#CODESTRA_SOURCE_SHA}" -eq 40 \
+    && printf '%s\n' "$CODESTRA_SOURCE_SHA" > /out/rootfs/usr/share/codestra/source-revision \
+    && chmod 0444 /out/rootfs/usr/share/codestra/source-revision
 
 FROM ${RUNTIME_IMAGE}
 ARG CODESTRA_SOURCE_SHA
-ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}
 LABEL org.opencontainers.image.title="Codestra Observability Control API"
 LABEL org.opencontainers.image.description="Private authenticated read-only control plane for fourteen Codestra observability authorities"
 LABEL org.opencontainers.image.vendor="Codestra"
@@ -37,6 +41,7 @@ COPY --from=build --chown=65532:65532 --chmod=0555 /out/codestra-observability-a
 COPY --from=build --chown=65532:65532 --chmod=0555 /out/codestra-control-api-healthcheck /usr/local/bin/codestra-control-api-healthcheck
 COPY --from=build --chown=65532:65532 /out/rootfs/ /
 USER 65532:65532
+ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}
 ENV CODESTRA_CONTROL_API_REGISTRY_FILE=/etc/codestra-observability/services.json \
     CODESTRA_CONTROL_API_OPENAPI_FILE=/etc/codestra-observability/openapi.json \
     CODESTRA_CONTROL_API_LISTEN_ADDRESS=127.0.0.1:8090 \

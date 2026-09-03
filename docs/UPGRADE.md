@@ -14,3 +14,16 @@ validated protected-production input. An image manifest may set
 workflow inspects that exact value in both the unpublished candidate and the
 pulled published digest before signing. The value is derived by the release
 workflow and must never be caller-authored in a build manifest.
+
+Both runnable images validate that embedded source revision at process startup.
+The Collector entrypoint and control API require it to equal the runtime source
+SHA, and require the runtime digest to equal the canonical full image identity.
+Any missing or conflicting value fails before the Collector handoff or API
+configuration load.
+The root build-context allowlist includes both Collector wrapper source and
+test files; removing either entry makes the exact-head image build fail closed.
+Release manifests are parsed with duplicate-key rejection so a later field
+cannot silently override the reviewed source-embedding contract.
+Exact-head image CI also starts both images without host networking, checks the
+Collector loopback health extension, and checks both control API liveness and
+readiness with a disposable mounted credential.
