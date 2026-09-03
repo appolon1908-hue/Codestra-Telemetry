@@ -10,5 +10,6 @@
   },
   "license": "Apache-2.0",
   "description": "Signed private OpenTelemetry Collector with mTLS ingress, redaction, sampling, and durable queues.",
+  "embedSourceRevision": true,
   "productionActivation": false
 }

@@ -10,5 +10,6 @@
   },
   "license": "Apache-2.0",
   "description": "Private authenticated read-only control plane for fourteen Codestra observability authorities.",
+  "embedSourceRevision": true,
   "productionActivation": false
 }

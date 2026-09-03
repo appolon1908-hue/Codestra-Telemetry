@@ -17,6 +17,13 @@ SPEC.loader.exec_module(RUNTIME_IDENTITY)
 
 
 class CollectorRuntimeIdentityTest(unittest.TestCase):
+    def test_image_starts_through_fail_closed_identity_entrypoint(self) -> None:
+        dockerfile = (ROOT / "codestra/deploy/Dockerfile").read_text()
+        entrypoint = (ROOT / "codestra/deploy/entrypoint.go").read_text()
+        self.assertIn('ENTRYPOINT ["/codestra-otelcol-entrypoint"]', dockerfile)
+        self.assertIn('syscall.Exec("/otelcol-contrib"', entrypoint)
+        self.assertIn("embeddedSourcePath", entrypoint)
+
     def values(self, digest: str = "2" * 64) -> dict[str, str]:
         return {
             "CODESTRA_OTELCOL_IMAGE": (

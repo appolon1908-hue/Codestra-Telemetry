@@ -25,6 +25,8 @@ REQUIRED = (
     ".dockerignore",
     "codestra/collector.yaml",
     "codestra/deploy/Dockerfile",
+    "codestra/deploy/entrypoint.go",
+    "codestra/deploy/entrypoint_test.go",
     "codestra/release/image-build.v1.json",
     "codestra/release/runtime-base.lock.json",
     "codestra/compose.candidate.yaml",
@@ -59,6 +61,7 @@ def main() -> None:
         or manifest.get("embedSourceRevision") is not True
         or manifest.get("dockerfile") != "codestra/deploy/Dockerfile"
         or manifest.get("context") != "."
+        or manifest.get("embedSourceRevision") is not True
         or manifest.get("productionActivation") is not False
     ):
         fail("Collector image manifest identity/context/activation mismatch")
@@ -103,8 +106,13 @@ def main() -> None:
         "-buildvcs=false",
         "-buildid=",
         "/otelcol-healthcheck",
+        "/codestra-otelcol-entrypoint",
         "/etc/otelcol-contrib/config.yaml",
+        "/usr/share/codestra/source-revision",
         "/usr/share/codestra/runtime-base.lock.json",
+        "ARG CODESTRA_SOURCE_SHA",
+        "ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}",
+        'ENTRYPOINT ["/codestra-otelcol-entrypoint"]',
         "USER 10001:10001",
     ):
         if token not in dockerfile:
@@ -138,6 +146,8 @@ def main() -> None:
         fail("Collector business label must be repository-controlled")
     if service.get("image") != "${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}":
         fail("Collector candidate image input is not fail-closed")
+    if service.get("environment", {}).get("CODESTRA_OTELCOL_IMAGE") != service.get("image"):
+        fail("Collector process must receive the exact immutable image identity")
     if service.get("ports") or set(service.get("networks", {})) != {
         "codestra-business-telemetry",
         "codestra-observability",
@@ -180,9 +190,14 @@ def main() -> None:
     for token in (
         '--build-arg "CODESTRA_SOURCE_SHA=$source_sha"',
         'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
+        'Entrypoint == ["/codestra-otelcol-entrypoint"]',
+        'CODESTRA_IMAGE_SOURCE_SHA=$source_sha',
+        'source-revision',
+        'docker exec "$container_id" /otelcol-healthcheck',
+        "--network none",
     ):
         if token not in build_inspection:
-            fail(f"exact local Collector image build lacks source embedding: {token}")
+            fail(f"Collector startup identity inspection omits: {token}")
 
     release = yaml.safe_load(
         (ROOT / ".github/workflows/release-collector-image.yml").read_text(

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/appolon1908-hue/Codestra-Telemetry/codestra/control-api/internal/controlapi"
+	"github.com/appolon1908-hue/Codestra-Telemetry/codestra/control-api/internal/runtimeidentity"
 )
 
 func main() {
@@ -23,6 +24,9 @@ func main() {
 		return
 	}
 	logger := log.New(os.Stdout, "", 0)
+	if err := runtimeidentity.ValidateEnvironment(); err != nil {
+		fatal(logger, "runtime_identity_invalid", err)
+	}
 	registryPath := envOrDefault("CODESTRA_CONTROL_API_REGISTRY_FILE", "config/services.json")
 	openAPIPath := envOrDefault("CODESTRA_CONTROL_API_OPENAPI_FILE", "openapi.json")
 	listenAddress := envOrDefault("CODESTRA_CONTROL_API_LISTEN_ADDRESS", "127.0.0.1:8090")

@@ -26,6 +26,8 @@ REQUIRED = (
     "codestra/control-api/release/runtime-base.lock.json",
     "codestra/control-api/compose.candidate.yaml",
     "codestra/control-api/runtime.env.example",
+    "codestra/control-api/internal/runtimeidentity/identity.go",
+    "codestra/control-api/internal/runtimeidentity/identity_test.go",
     ".github/workflows/release-control-api-image.yml",
     "scripts/build_and_inspect_control_api_image.sh",
     "scripts/validate_control_api_runtime_identity.py",
@@ -56,6 +58,7 @@ def main() -> None:
         or manifest.get("embedSourceRevision") is not True
         or manifest.get("dockerfile") != "codestra/control-api/Dockerfile"
         or manifest.get("context") != "codestra/control-api"
+        or manifest.get("embedSourceRevision") is not True
         or manifest.get("productionActivation") is not False
     ):
         fail("control API image manifest identity/context/activation mismatch")
@@ -89,6 +92,9 @@ def main() -> None:
         "-buildvcs=false",
         "-buildid=",
         "cmd/healthcheck",
+        "/usr/share/codestra/source-revision",
+        "ARG CODESTRA_SOURCE_SHA",
+        "ENV CODESTRA_IMAGE_SOURCE_SHA=${CODESTRA_SOURCE_SHA}",
         "USER 65532:65532",
         'CODESTRA_CONTROL_API_LISTEN_ADDRESS=127.0.0.1:8090',
         'CODESTRA_CONTROL_API_AUTH_MODE=required',
@@ -122,6 +128,8 @@ def main() -> None:
         fail("control API credential must be read from its mounted file")
     if environment.get("CODESTRA_CONTROL_API_LISTEN_ADDRESS") != "0.0.0.0:8090":
         fail("container listener must be available only on the private Compose network")
+    if environment.get("CODESTRA_CONTROL_API_IMAGE") != service.get("image"):
+        fail("control API process must receive the exact immutable image identity")
     if set(compose.get("secrets", {})) != {"control_api_bearer_token"}:
         fail("control API must declare exactly its bearer-token file")
     if any(set(value) != {"file"} for value in compose["secrets"].values()):
@@ -152,9 +160,12 @@ def main() -> None:
     for token in (
         '--build-arg "CODESTRA_SOURCE_SHA=$source_sha"',
         'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
+        'CODESTRA_IMAGE_SOURCE_SHA=$source_sha',
+        'source-revision',
+        'docker exec "$container_id" /usr/local/bin/codestra-control-api-healthcheck',
     ):
         if token not in build_inspection:
-            fail(f"exact local control API image build lacks source embedding: {token}")
+            fail(f"control API startup identity inspection omits: {token}")
 
     release = yaml.safe_load(
         (ROOT / ".github/workflows/release-control-api-image.yml").read_text(

@@ -16,6 +16,14 @@ SPEC.loader.exec_module(RUNTIME_IDENTITY)
 
 
 class RuntimeIdentityTest(unittest.TestCase):
+    def test_server_validates_embedded_identity_before_configuration(self) -> None:
+        main = (ROOT / "codestra/control-api/cmd/codestra-observability-api/main.go").read_text()
+        identity = (ROOT / "codestra/control-api/internal/runtimeidentity/identity.go").read_text()
+        self.assertLess(main.index("runtimeidentity.ValidateEnvironment()"), main.index("controlapi.LoadRegistry"))
+        self.assertIn("embeddedSourcePath", identity)
+        healthcheck = (ROOT / "codestra/control-api/cmd/healthcheck/main.go").read_text()
+        self.assertIn('[]string{"/healthz", "/readyz"}', healthcheck)
+
     def test_accepts_aligned_immutable_identity(self) -> None:
         digest = "2" * 64
         values = {
