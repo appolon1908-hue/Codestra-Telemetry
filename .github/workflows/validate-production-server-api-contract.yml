@@ -88,12 +88,12 @@ jobs:
           topology_required = [
               'CODESTRA_OTLP_BIND_HOST: otel-collector-platform-ingress',
               'CODESTRA_METRICS_BIND_HOST: otel-collector-platform-metrics',
-              '- otel-collector-platform-ingress',
-              '- otel-collector-platform-metrics',
+              'aliases: [otel-collector-platform-ingress]',
+              'aliases: [otel-collector-platform-metrics]',
           ]
           missing = [value for value in topology_required if value not in compose]
           assert not missing, f'Compose omits isolated listener topology: {missing}'
-          assert '\n          - otel-collector\n' not in compose, 'generic collector alias is prohibited'
+          assert 'aliases: [otel-collector]' not in compose, 'generic collector alias is prohibited'
 
           entrypoint = Path('codestra/deploy/entrypoint.go').read_text(encoding='utf-8')
           entrypoint_required = [
