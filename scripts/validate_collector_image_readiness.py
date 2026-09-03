@@ -136,9 +136,20 @@ def main() -> None:
     ):
         if source not in dockerignore:
             fail(f"Collector entrypoint excluded from build context: {source[1:]}")
+    entrypoint = (ROOT / "codestra/deploy/entrypoint.go").read_text(encoding="utf-8")
+    for token in (
+        'serverCertificatePath = "/run/secrets/otelcol_server_cert"',
+        "validateServerCertificate",
+        "certificate.VerifyHostname(hostname)",
+    ):
+        if token not in entrypoint:
+            fail(f"Collector startup certificate identity gate missing: {token}")
     healthcheck = (ROOT / "codestra/deploy/healthcheck.go").read_text(encoding="utf-8")
-    if "http://127.0.0.1:13133/" not in healthcheck or "Getenv" in healthcheck:
-        fail("Collector image health probe must be bounded to loopback")
+    if (
+        "http://otel-collector-platform-metrics:13133/" not in healthcheck
+        or "Getenv" in healthcheck
+    ):
+        fail("Collector image health probe must be bounded to the metrics alias")
 
     compose_text = (ROOT / "codestra/compose.candidate.yaml").read_text(
         encoding="utf-8"
@@ -161,6 +172,10 @@ def main() -> None:
         fail("Collector candidate must use the pre-pulled image and drop capabilities")
     if service.get("environment", {}).get("CODESTRA_BUSINESS") != "platform":
         fail("Collector business identity must be repository-controlled")
+    if service.get("environment", {}).get("CODESTRA_OTLP_BIND_HOST") != "otel-collector-platform-ingress":
+        fail("Collector ingress binding must be repository-controlled")
+    if service.get("environment", {}).get("CODESTRA_METRICS_BIND_HOST") != "otel-collector-platform-metrics":
+        fail("Collector metrics binding must be repository-controlled")
     if service.get("labels", {}).get("codestra.business") != "platform":
         fail("Collector business label must be repository-controlled")
     if service.get("image") != "${CODESTRA_OTELCOL_IMAGE:?immutable Codestra Collector image with sha256 digest is required}":
@@ -172,6 +187,12 @@ def main() -> None:
         "codestra-observability",
     }:
         fail("Collector candidate private network boundary mismatch")
+    if service["networks"]["codestra-business-telemetry"].get("aliases") != [
+        "otel-collector-platform-ingress"
+    ] or service["networks"]["codestra-observability"].get("aliases") != [
+        "otel-collector-platform-metrics"
+    ]:
+        fail("Collector network aliases are ambiguous or cross-boundary")
     secrets = compose.get("secrets", {})
     if set(secrets) != {
         "otelcol_server_cert",
@@ -211,8 +232,13 @@ def main() -> None:
         'test "$embedded_source" = "CODESTRA_IMAGE_SOURCE_SHA=$source_sha"',
         'Entrypoint == ["/codestra-otelcol-entrypoint"]',
         'CODESTRA_IMAGE_SOURCE_SHA=$source_sha',
+        'target=/run/secrets/otelcol_server_cert,readonly',
         'source-revision',
         'docker exec "$container_id" /otelcol-healthcheck',
+        '--add-host otel-collector-platform-ingress:127.0.0.1',
+        '--add-host otel-collector-platform-metrics:127.0.0.1',
+        '--env CODESTRA_OTLP_BIND_HOST=otel-collector-platform-ingress',
+        '--env CODESTRA_METRICS_BIND_HOST=otel-collector-platform-metrics',
         "--network none",
     ):
         if token not in build_inspection:

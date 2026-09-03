@@ -25,5 +25,12 @@ test files; removing either entry makes the exact-head image build fail closed.
 Release manifests are parsed with duplicate-key rejection so a later field
 cannot silently override the reviewed source-embedding contract.
 Exact-head image CI also starts both images without host networking, checks the
-Collector loopback health extension, and checks both control API liveness and
+Collector metrics-network health extension, and checks both control API liveness and
 readiness with a disposable mounted credential.
+
+The Collector's business-ingress and observability interfaces use distinct,
+repository-controlled aliases. OTLP receivers bind only to
+`otel-collector-platform-ingress`; health and Prometheus endpoints bind only to
+`otel-collector-platform-metrics`. Treat a change to either alias or to the
+fixed `platform` business identity as an architecture change requiring the
+same configuration, Compose, startup, and disposable-image gates.

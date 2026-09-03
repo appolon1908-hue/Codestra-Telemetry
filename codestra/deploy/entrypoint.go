@@ -1,11 +1,14 @@
 package main
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var (
@@ -15,6 +18,9 @@ var (
 )
 
 const embeddedSourcePath = "/usr/share/codestra/source-revision"
+const serverCertificatePath = "/run/secrets/otelcol_server_cert"
+const otlpBindHost = "otel-collector-platform-ingress"
+const metricsBindHost = "otel-collector-platform-metrics"
 
 func validateIdentity(source, bakedSource, digest, image, embeddedSource string) error {
 	if !sourcePattern.MatchString(source) || !sourcePattern.MatchString(bakedSource) || !sourcePattern.MatchString(embeddedSource) {
@@ -26,6 +32,35 @@ func validateIdentity(source, bakedSource, digest, image, embeddedSource string)
 	match := imagePattern.FindStringSubmatch(image)
 	if !digestPattern.MatchString(digest) || len(match) != 2 || match[1] != digest {
 		return fmt.Errorf("runtime image identity is malformed or inconsistent")
+	}
+	return nil
+}
+
+func validateTopology(business, otlpHost, metricsHost string) error {
+	if business != "platform" || otlpHost != otlpBindHost || metricsHost != metricsBindHost {
+		return fmt.Errorf("runtime topology differs from the repository authority")
+	}
+	return nil
+}
+
+func validateServerCertificate(path, hostname string, now time.Time) error {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read server certificate: %w", err)
+	}
+	block, _ := pem.Decode(contents)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return fmt.Errorf("server certificate is not PEM encoded")
+	}
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("parse server certificate: %w", err)
+	}
+	if now.Before(certificate.NotBefore) || !now.Before(certificate.NotAfter) {
+		return fmt.Errorf("server certificate is not currently valid")
+	}
+	if err := certificate.VerifyHostname(hostname); err != nil {
+		return fmt.Errorf("server certificate does not cover the ingress identity")
 	}
 	return nil
 }
@@ -44,6 +79,18 @@ func main() {
 		strings.TrimSpace(string(embedded)),
 	); err != nil {
 		fmt.Fprintln(os.Stderr, "collector startup identity validation failed")
+		os.Exit(78)
+	}
+	if err := validateTopology(
+		strings.TrimSpace(os.Getenv("CODESTRA_BUSINESS")),
+		strings.TrimSpace(os.Getenv("CODESTRA_OTLP_BIND_HOST")),
+		strings.TrimSpace(os.Getenv("CODESTRA_METRICS_BIND_HOST")),
+	); err != nil {
+		fmt.Fprintln(os.Stderr, "collector startup topology validation failed")
+		os.Exit(78)
+	}
+	if err := validateServerCertificate(serverCertificatePath, otlpBindHost, time.Now()); err != nil {
+		fmt.Fprintln(os.Stderr, "collector startup certificate validation failed")
 		os.Exit(78)
 	}
 	if err := syscall.Exec("/otelcol-contrib", append([]string{"/otelcol-contrib"}, os.Args[1:]...), os.Environ()); err != nil {
