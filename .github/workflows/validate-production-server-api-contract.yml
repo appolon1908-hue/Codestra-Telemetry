@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - codestra/collector.yaml
+      - codestra/compose.candidate.yaml
+      - codestra/deploy/entrypoint.go
       - docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md
       - docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md
       - .github/workflows/validate-production-server-api-contract.yml
@@ -11,6 +13,8 @@ on:
     branches: [development, test, staging, production, main]
     paths:
       - codestra/collector.yaml
+      - codestra/compose.candidate.yaml
+      - codestra/deploy/entrypoint.go
       - docs/CODESTRA_PRODUCTION_SERVER_API_CONTRACT.md
       - docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md
       - .github/workflows/validate-production-server-api-contract.yml
@@ -56,10 +60,11 @@ jobs:
 
           collector = Path('codestra/collector.yaml').read_text(encoding='utf-8')
           source_required = [
-              'endpoint: 0.0.0.0:13133',
-              'endpoint: 0.0.0.0:4317',
-              'endpoint: 0.0.0.0:4318',
-              'endpoint: 0.0.0.0:8889',
+              'endpoint: ${env:CODESTRA_METRICS_BIND_HOST}:13133',
+              'endpoint: ${env:CODESTRA_OTLP_BIND_HOST}:4317',
+              'endpoint: ${env:CODESTRA_OTLP_BIND_HOST}:4318',
+              'endpoint: ${env:CODESTRA_METRICS_BIND_HOST}:8889',
+              'targets: ["${env:CODESTRA_METRICS_BIND_HOST}:8888"]',
               'port: 8888',
               'codestra\\.business|codestra_business|tenant',
               'codestra(\\\\.business|_business)',
@@ -72,6 +77,31 @@ jobs:
           assert delete_both >= 0 and authoritative > delete_both, (
               'caller business spellings must be deleted before the authoritative dotted key is installed'
           )
+
+          wildcard_listeners = [
+              f'0.0.0.0:{port}' for port in (13133, 4317, 4318, 8888, 8889)
+          ]
+          present = [value for value in wildcard_listeners if value in collector]
+          assert not present, f'collector contains forbidden wildcard listeners: {present}'
+
+          compose = Path('codestra/compose.candidate.yaml').read_text(encoding='utf-8')
+          topology_required = [
+              'CODESTRA_OTLP_BIND_HOST: otel-collector-platform-ingress',
+              'CODESTRA_METRICS_BIND_HOST: otel-collector-platform-metrics',
+              '- otel-collector-platform-ingress',
+              '- otel-collector-platform-metrics',
+          ]
+          missing = [value for value in topology_required if value not in compose]
+          assert not missing, f'Compose omits isolated listener topology: {missing}'
+          assert '\n          - otel-collector\n' not in compose, 'generic collector alias is prohibited'
+
+          entrypoint = Path('codestra/deploy/entrypoint.go').read_text(encoding='utf-8')
+          entrypoint_required = [
+              'CODESTRA_OTLP_BIND_HOST', 'CODESTRA_METRICS_BIND_HOST',
+              'otel-collector-platform-ingress', 'otel-collector-platform-metrics',
+          ]
+          missing = [value for value in entrypoint_required if value not in entrypoint]
+          assert not missing, f'Collector startup omits topology validation: {missing}'
 
           handoff = Path('docs/CODESTRA_OBSERVABILITY_PRODUCTION_SERVER_HANDOFF.md').read_text(encoding='utf-8')
           handoff_required = [
