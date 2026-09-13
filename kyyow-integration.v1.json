@@ -6,19 +6,24 @@
   "exposure": "private",
   "native_ports": [
     4317,
-    4318
+    4318,
+    8888,
+    8889,
+    13133
   ],
   "inputs": [
     "kyyow-workloads:otlp"
   ],
   "outputs": [
-    "alloy:otlp"
+    "prometheus:metrics (scrape collector exporter on 8889)",
+    "loki:logs (OTLP HTTP directly)",
+    "tempo:traces (OTLP gRPC directly)"
   ],
   "controls": [
-    "scraped page bodies, contact values, tokens, and secrets are rejected or redacted",
-    "tenant_id remains a governed resource attribute",
-    "receivers require private networking and authenticated transport",
-    "collector has no business-system credentials"
+    "declared sensitive attributes are deleted; transform/logs does not redact arbitrary log record bodies",
+    "producers must omit scraped page bodies, contacts, tokens and secrets; body sanitization remains an activation prerequisite",
+    "resource/codestra derives codestra.business from operator configuration and replaces tenant scope with aggregate",
+    "receivers require private networking and authenticated transport; collector has no business-system credentials"
   ],
   "identity": {
     "authority": "appolon1908-hue/Keycloak",
