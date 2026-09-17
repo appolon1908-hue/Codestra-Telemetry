@@ -92,3 +92,10 @@ Production promotion requires:
 - human approval.
 
 Promotion order is `feature/* -> development -> test -> staging -> production -> main`. All source configuration remains `CONFIG_PREPARED_NOT_DEPLOYED` until the evidence package is approved.
+
+## Local agent, central gateway and correlation (2026-09-16)
+
+- `codestra/collector-agent.yaml` is the per-host OpenTelemetry Collector agent: applications send OTLP to `127.0.0.1:4318` (`/v1/traces`, `/v1/metrics`, `/v1/logs`) or gRPC `127.0.0.1:4317`; the agent redacts credentials, cookies, keys, JWT/OpenBao-shaped values and personal contact data before anything leaves the host, buffers through a bounded file-backed queue, and forwards over mutual TLS to the central gateway only. It never exports to Tempo, Loki or Prometheus directly and never binds a non-loopback address. Alloy stays the log-file/journal agent (`opentelemetryOwnsApplicationOtlp` is unchanged).
+- The gateway (`codestra/collector.yaml`) keeps `correlation.id` on spans and logs, normalised from `correlation_id` and bounded to 128 characters, so one TEST_SYN operation can be followed across Caddy -> Kong -> Middleware -> Odoo/N8N and joined to its Middleware incident. Metrics never carry it. W3C `traceparent`/`tracestate` remain intrinsic to spans.
+- Every `/run/secrets/otelcol_*` file is the OpenBao agent rendering of a reference in `codestra/secret-references.v1.json` (identity `otel-gateway`); no credential is committed.
+- Failure modes: gateway unreachable -> the agent queues within its bounded file storage and business traffic continues; Tempo or Loki unreachable -> the gateway retries within its bounded budget and export failures surface as `otelcol_exporter_send_failed_*` (alerted by Prometheus); Middleware unreachable -> telemetry paths are unaffected.

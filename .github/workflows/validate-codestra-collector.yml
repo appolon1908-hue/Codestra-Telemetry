@@ -71,6 +71,12 @@ jobs:
           LOKI_TLS_SERVER_NAME: loki.codestra.media
         run: /tmp/otelcol-contrib validate --config codestra/collector.yaml
 
+      - name: Validate local agent profile natively
+        env:
+          OTEL_GATEWAY_OTLP_GRPC_ENDPOINT: otel-gateway:4317
+          OTEL_GATEWAY_TLS_SERVER_NAME: otel.codestra.media
+        run: /tmp/otelcol-contrib validate --config codestra/collector-agent.yaml
+
       - name: Render and inspect private runtime authority
         env:
           CODESTRA_OTELCOL_IMAGE: ghcr.io/appolon1908-hue/codestra-telemetry-opentelemetry@sha256:2222222222222222222222222222222222222222222222222222222222222222

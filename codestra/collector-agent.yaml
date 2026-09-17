@@ -1,0 +1,111 @@
+# Local OpenTelemetry Collector agent profile: one per application host.
+#
+# Applications send OTLP to this agent on the loopback interface only
+# (http://127.0.0.1:4318/v1/traces, /v1/metrics, /v1/logs or gRPC 4317). The
+# agent redacts before anything leaves the host, then forwards over mutual TLS
+# to the central gateway (codestra/collector.yaml), which owns identity
+# enforcement, tail sampling and the Tempo/Loki/Prometheus exporters. The agent
+# never exports to a backend directly and never binds a non-loopback address.
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:13134
+  file_storage:
+    directory: /var/lib/otelcol-agent/storage
+    create_directory: true
+    timeout: 10s
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+        max_recv_msg_size_mib: 8
+      http:
+        endpoint: 127.0.0.1:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 60
+    spike_limit_percentage: 15
+
+  # Defense in depth before export: credentials, cookies, keys, OpenBao and
+  # JWT-shaped values, database statements and personal contact data never
+  # leave the host. The gateway applies the full corporate policy again.
+  attributes/redact:
+    actions:
+      - pattern: '(?i)^(authorization|proxy_authorization|cookie|set-cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|id_token|private_key|database_url|dsn|x-vault-token|x-openbao-token|openbao_token|vault_token|jwt|db\.statement|http\.request\.header\..*|http\.response\.header\..*|user\.(email|phone)|email|phone)$'
+        action: delete
+
+  transform/secret_shaped:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - replace_all_patterns(attributes, "value", "(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]")
+          - replace_all_patterns(attributes, "value", "\\b(hvs|hvb)\\.[A-Za-z0-9_-]{20,}", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "[REDACTED_JWT]")
+          - replace_all_patterns(attributes, "value", "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]")
+    log_statements:
+      - context: log
+        statements:
+          - replace_all_patterns(attributes, "value", "(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]")
+          - replace_all_patterns(attributes, "value", "\\b(hvs|hvb)\\.[A-Za-z0-9_-]{20,}", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "[REDACTED_JWT]")
+          - replace_pattern(body, "(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]")
+          - replace_pattern(body, "\\b(hvs|hvb)\\.[A-Za-z0-9_-]{20,}", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_pattern(body, "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "[REDACTED_JWT]")
+          - replace_pattern(body, "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]")
+
+  batch:
+    timeout: 2s
+    send_batch_size: 2048
+    send_batch_max_size: 4096
+
+exporters:
+  otlp/gateway:
+    endpoint: ${env:OTEL_GATEWAY_OTLP_GRPC_ENDPOINT}
+    tls:
+      insecure: false
+      ca_file: /run/secrets/otelcol_gateway_ca
+      cert_file: /run/secrets/otelcol_agent_client_cert
+      key_file: /run/secrets/otelcol_agent_client_key
+      server_name_override: ${env:OTEL_GATEWAY_TLS_SERVER_NAME}
+    sending_queue:
+      enabled: true
+      storage: file_storage
+      num_consumers: 2
+      queue_size: 1024
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 5m
+
+service:
+  extensions: [health_check, file_storage]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, transform/secret_shaped, batch]
+      exporters: [otlp/gateway]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlp/gateway]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, transform/secret_shaped, batch]
+      exporters: [otlp/gateway]
+  telemetry:
+    logs:
+      level: info
+      encoding: json
+    metrics:
+      level: basic
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 127.0.0.1
+                port: 8887
