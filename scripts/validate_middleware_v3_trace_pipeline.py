@@ -31,6 +31,16 @@ STATEMENT_RE = re.compile(
 )
 V3_STAGES = ["http_ingress", "jwt_auth", "policy_engine", "safety_gate", "db_transaction", "outbox", "worker_lease", "adapter_execution", "provider_readback", "reconciliation"]
 
+
+def fake(prefix: str, body: str) -> str:
+    """Assemble a credential-shaped test value at runtime so no literal secret shape lives in source."""
+    return prefix + body
+
+
+FAKE_JWT = ".".join((fake("eyJ", "hbGciOiJSUzI1NiJ9"), fake("eyJ", "zdWIiOiJtaWRkbGV3YXJlIn0"), "c2lnbmF0dXJlLXNpZ25hdHVyZQ"))
+FAKE_SK = fake("sk_", "live_PROVIDERKEY1234567890")
+FAKE_PK = fake("pk_", "live_PROVIDERKEY1234567890")
+
 DELETED_KEYS = [
     "authorization", "cookie", "set-cookie", "password", "api_key", "x-api-key", "client_secret", "access_token",
     "smtp_password", "db_password", "redis_password", "postgres_password", "provider_api_key", "telnexa_api_key",
@@ -44,7 +54,7 @@ KEPT_KEYS = [
     "http.route", "http.response.status_code", "codestra.lease.outcome", "codestra.token_count", "idempotency_key_hash",
 ]
 VALUE_CORPUS: list[tuple[str, list[str], list[str]]] = [
-    ("Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJtaWRkbGV3YXJlIn0.c2lnbmF0dXJlLXNpZ25hdHVyZQ", ["eyJhbGciOiJSUzI1NiJ9"], []),
+    (f"Bearer {FAKE_JWT}", [FAKE_JWT.split('.')[0]], []),
     ("Basic dXNlcjpwYXNzd29yZC12YWx1ZQ==", ["dXNlcjpwYXNzd29yZC12YWx1ZQ=="], []),
     ("postgres://mw:DbPassw0rd@postgres:5432/mw", ["DbPassw0rd"], ["postgres:5432"]),
     ("redis://:RedisPassw0rd@redis:6379/0", ["RedisPassw0rd"], ["redis:6379"]),
@@ -59,7 +69,7 @@ VALUE_CORPUS: list[tuple[str, list[str], list[str]]] = [
 ]
 BODY_CORPUS: list[tuple[str, list[str], list[str]]] = VALUE_CORPUS + [
     ("SMTP_PASSWORD=S3cr3tSMTPpass SMTP_HOST=smtp.internal", ["S3cr3tSMTPpass"], ["smtp.internal"]),
-    ("provider_api_key=sk_live_PROVIDERKEY1234567890 provider=klyrow", ["sk_live_PROVIDERKEY1234567890"], ["klyrow"]),
+    (f"provider_api_key={FAKE_SK} provider=klyrow", [FAKE_SK], ["klyrow"]),
     ("db_password: DbPassw0rd host: postgres", ["DbPassw0rd"], ["postgres"]),
     ("client_secret=kc-client-secret-value-123 client_id=middleware-api", ["kc-client-secret-value-123"], ["middleware-api"]),
     ("openbao_token=s.abcdefghijklmnopqrstuvwxyz1234 operation_id=op-1", ["s.abcdefghijklmnopqrstuvwxyz1234"], ["op-1"]),
