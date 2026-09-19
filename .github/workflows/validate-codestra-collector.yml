@@ -44,8 +44,10 @@ jobs:
         env:
           PYTHONPYCACHEPREFIX: /tmp/codestra-telemetry-pycache
         run: |
-          python -m py_compile scripts/validate_codestra_collector.py scripts/validate_codestra_telemetry.py
+          python -m py_compile scripts/validate_codestra_collector.py scripts/validate_codestra_telemetry.py scripts/validate_middleware_v3_trace_pipeline.py
           python scripts/validate_codestra_collector.py
+          python scripts/validate_middleware_v3_trace_pipeline.py
+          python -m unittest tests/test_middleware_v3_trace_pipeline.py
           python scripts/validate_collector_image_readiness.py
 
       - name: Download and verify official Collector Contrib validator

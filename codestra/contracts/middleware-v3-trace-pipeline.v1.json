@@ -1,0 +1,233 @@
+{
+  "schema_version": "1.0",
+  "contract_id": "middleware-v3-trace-pipeline",
+  "lane": "E",
+  "status": "PREPARED_DISABLED",
+  "activation_enabled": false,
+  "provider_effects_enabled": false,
+  "purpose": "Trace path for Middleware V3: Middleware OTel SDK -> per-host collector agent (loopback OTLP) -> central gateway (mutual TLS) -> Tempo. W3C traceparent/tracestate are preserved end to end; correlation.id is normalised and bounded; every credential class is scrubbed before export.",
+  "middleware": {
+    "repository": "appolon1908-hue/Middleware-",
+    "prep_base_sha": "22d023a9c65b0789a0f7ee6c28548753521a9eff",
+    "v3_final_sha": "PENDING",
+    "repin_required_after_v3_merge": true,
+    "v3_candidate_observed": {
+      "branch": "mission/middleware-v3-command-kernel-20260919",
+      "sha": "1acb2ae",
+      "authority": "informational only; unmerged, owned by the Middleware V3 session"
+    }
+  },
+  "path": {
+    "producer": "Middleware OTel SDK (traces, logs, metrics over OTLP)",
+    "agent": "codestra/collector-agent.yaml: receivers otlp 127.0.0.1:4317/4318 only; processors memory_limiter, attributes/redact, transform/secret_shaped, batch; exporter otlp/gateway (mTLS from /run/secrets, file-backed queue)",
+    "gateway": "codestra/collector.yaml: resource/codestra, attributes/redact, filter/required_identity, filter/tenant_safe, transform/traces, transform/correlation, tail_sampling, batch -> Tempo (OTLP, TLS, X-Scope-OrgID)",
+    "storage": "Codestra-Tempo (traces), Codestra-Loki (logs), Codestra-Prometheus (metrics via remote write / scrape)"
+  },
+  "propagation": {
+    "standard": "W3C Trace Context",
+    "headers": [
+      "traceparent",
+      "tracestate"
+    ],
+    "rules": [
+      "the collector never rewrites trace_id, span_id or parent_span_id (no OTTL set() on trace context fields)",
+      "Middleware echoes a valid inbound traceparent, drops an invalid one and mints a new context when absent (app/core/request_guard.py at the prep base)",
+      "asynchronous hops (outbox -> worker -> adapter) use span links to the originating span",
+      "X-Correlation-ID becomes span/log attribute correlation.id (<= 128 chars) in transform/correlation; metrics never carry it"
+    ]
+  },
+  "required_resource_attributes": [
+    "service.name",
+    "service.version",
+    "deployment.id",
+    "deployment.environment.name",
+    "codestra.application",
+    "codestra.business"
+  ],
+  "required_common_fields": {
+    "service_id": "resource service.name",
+    "environment": "resource deployment.environment.name",
+    "deployment_sha": "resource deployment.id (git sha of the running image)",
+    "correlation_id": "span/log attribute correlation.id",
+    "operation_id": "span/log attribute codestra.operation.id (bounded opaque; never a metric label; never a Loki label)",
+    "trace_id": "OTLP trace context (native), mirrored to logs as trace_id/span_id"
+  },
+  "v3_span_coverage": [
+    {
+      "stage": "http_ingress",
+      "span_name": "middleware.http.server",
+      "kind": "SERVER",
+      "attributes": [
+        "http.request.method",
+        "http.route",
+        "http.response.status_code",
+        "correlation.id"
+      ],
+      "note": "one per inbound request; the W3C traceparent from Kong/Caddy is the parent",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "jwt_auth",
+      "span_name": "middleware.auth.verify",
+      "kind": "INTERNAL",
+      "attributes": [
+        "codestra.auth.client_id",
+        "codestra.auth.result"
+      ],
+      "note": "issuer/audience/scope verification; never the token",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "policy_engine",
+      "span_name": "middleware.policy.evaluate",
+      "kind": "INTERNAL",
+      "attributes": [
+        "codestra.command_family",
+        "codestra.policy.result",
+        "codestra.policy.reason"
+      ],
+      "note": "closed reason enum only",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "safety_gate",
+      "span_name": "middleware.safety.evaluate",
+      "kind": "INTERNAL",
+      "attributes": [
+        "codestra.command_family",
+        "codestra.safety.result",
+        "codestra.safety.reason"
+      ],
+      "note": "closed reason enum only",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "db_transaction",
+      "span_name": "middleware.db.transaction",
+      "kind": "CLIENT",
+      "attributes": [
+        "db.system",
+        "db.operation.name",
+        "codestra.db.result"
+      ],
+      "note": "never db.statement or parameters",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "outbox",
+      "span_name": "middleware.outbox.enqueue|dispatch",
+      "kind": "PRODUCER",
+      "attributes": [
+        "codestra.command_family",
+        "codestra.outbox.result"
+      ],
+      "note": "span link from dispatch to the enqueueing span",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "worker_lease",
+      "span_name": "middleware.worker.lease",
+      "kind": "CONSUMER",
+      "attributes": [
+        "codestra.worker.result",
+        "codestra.lease.outcome"
+      ],
+      "note": "acquire/renew/expire; lease ids never as attributes",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "adapter_execution",
+      "span_name": "middleware.adapter.execute",
+      "kind": "CLIENT",
+      "attributes": [
+        "codestra.adapter",
+        "codestra.adapter.operation",
+        "codestra.adapter.result"
+      ],
+      "note": "one per provider call; provider credentials never present",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "provider_readback",
+      "span_name": "middleware.adapter.readback",
+      "kind": "CLIENT",
+      "attributes": [
+        "codestra.adapter",
+        "codestra.readback.result"
+      ],
+      "note": "matched/mismatched/unavailable",
+      "status": "EXPECTED_PENDING_V3"
+    },
+    {
+      "stage": "reconciliation",
+      "span_name": "middleware.reconcile",
+      "kind": "INTERNAL",
+      "attributes": [
+        "codestra.adapter",
+        "codestra.reconciliation.decision"
+      ],
+      "note": "closed decision enum",
+      "status": "EXPECTED_PENDING_V3"
+    }
+  ],
+  "forbidden_span_attributes": [
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "password",
+    "passwd",
+    "api_key",
+    "x-api-key",
+    "client_secret",
+    "access_token",
+    "refresh_token",
+    "id_token",
+    "private_key",
+    "database_url",
+    "dsn",
+    "x-vault-token",
+    "x-openbao-token",
+    "openbao_token",
+    "vault_token",
+    "bao_token",
+    "jwt",
+    "db.statement",
+    "exception.message",
+    "user.email",
+    "email",
+    "phone",
+    "tenant_id",
+    "customer_id",
+    "user_id",
+    "command_payload",
+    "secret_value",
+    "http.request.header.*",
+    "http.response.header.*"
+  ],
+  "redaction": {
+    "attribute_keys_deleted": "exact list plus any key ending in password/passwd/secret/token/api_key/apikey/private_key/credential(s)/dsn/database_url/connection_string/signing_key/access_key/client_secret",
+    "values_scrubbed": [
+      "Bearer ...",
+      "Basic ...",
+      "hvs./hvb./s./b. OpenBao tokens",
+      "JWT shapes",
+      "PEM private keys",
+      "user:password@ in connection URLs",
+      "key=value credential pairs in log bodies"
+    ],
+    "preserved": [
+      "correlation.id",
+      "codestra.operation.id",
+      "openbao.secret_ref",
+      "openbao.secret_class",
+      "codestra.token_type",
+      "deployment.id"
+    ],
+    "replayed_by": "scripts/validate_middleware_v3_trace_pipeline.py"
+  },
+  "v3_expectations": [
+    "Middleware V3 instruments the ten kernel stages above with the listed low-cardinality attributes",
+    "Kong and Caddy propagate traceparent so a TEST_SYN operation is one trace from edge to adapter (Codestra-Tempo trace-propagation-contract.v1.json)",
+    "Re-pin middleware.v3_final_sha and replay a V3 trace sample through scripts/validate_middleware_v3_trace_pipeline.py"
+  ]
+}

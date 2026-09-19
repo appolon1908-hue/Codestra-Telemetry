@@ -36,6 +36,13 @@ processors:
     actions:
       - pattern: '(?i)^(authorization|proxy_authorization|cookie|set-cookie|password|passwd|api[_-]?key|client_secret|access_token|refresh_token|session_token|id_token|private_key|database_url|dsn|x-vault-token|x-openbao-token|openbao_token|vault_token|jwt|db\.statement|http\.request\.header\..*|http\.response\.header\..*|user\.(email|phone)|email|phone)$'
         action: delete
+      # Middleware V3 preparation: compound credential names (smtp_password, db_password,
+      # provider_api_key, x-api-key, bao_token, aws_secret_access_key, *_client_secret,
+      # *_credentials, *_dsn) are deleted by suffix. Reference metadata such as
+      # openbao.secret_ref, openbao.secret_class or codestra.token_type ends differently
+      # and stays available for drilldown.
+      - pattern: '(?i)^[a-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|private[_-]?key|credentials?|dsn|database[_-]?url|connection[_-]?string|signing[_-]?key|access[_-]?key|client[_-]?secret)$'
+        action: delete
 
   transform/secret_shaped:
     error_mode: ignore
@@ -46,16 +53,30 @@ processors:
           - replace_all_patterns(attributes, "value", "\\b(hvs|hvb)\\.[A-Za-z0-9_-]{20,}", "[REDACTED_OPENBAO_TOKEN]")
           - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "[REDACTED_JWT]")
           - replace_all_patterns(attributes, "value", "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]")
+          - replace_all_patterns(attributes, "value", "(?i)\\bBasic\\s+[A-Za-z0-9+/=]{16,}", "Basic [REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)\\b([a-z][a-z0-9+.-]*://[^/\\s:@]*):([^@\\s/]+)@", "$$1:[REDACTED]@")
+          - replace_all_patterns(attributes, "value", "\\bs\\.[A-Za-z0-9]{24,}\\b", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_all_patterns(attributes, "value", "\\bb\\.[A-Za-z0-9_-]{64,}", "[REDACTED_OPENBAO_TOKEN]")
     log_statements:
       - context: log
         statements:
           - replace_all_patterns(attributes, "value", "(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]")
           - replace_all_patterns(attributes, "value", "\\b(hvs|hvb)\\.[A-Za-z0-9_-]{20,}", "[REDACTED_OPENBAO_TOKEN]")
           - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "[REDACTED_JWT]")
+          - replace_all_patterns(attributes, "value", "(?i)\\bBasic\\s+[A-Za-z0-9+/=]{16,}", "Basic [REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)\\b([a-z][a-z0-9+.-]*://[^/\\s:@]*):([^@\\s/]+)@", "$$1:[REDACTED]@")
+          - replace_all_patterns(attributes, "value", "\\bs\\.[A-Za-z0-9]{24,}\\b", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_all_patterns(attributes, "value", "\\bb\\.[A-Za-z0-9_-]{64,}", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_all_patterns(attributes, "value", "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]")
           - replace_pattern(body, "(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]")
           - replace_pattern(body, "\\b(hvs|hvb)\\.[A-Za-z0-9_-]{20,}", "[REDACTED_OPENBAO_TOKEN]")
           - replace_pattern(body, "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "[REDACTED_JWT]")
           - replace_pattern(body, "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]")
+          - replace_pattern(body, "(?i)\\bBasic\\s+[A-Za-z0-9+/=]{16,}", "Basic [REDACTED]")
+          - replace_pattern(body, "(?i)\\b([a-z][a-z0-9+.-]*://[^/\\s:@]*):([^@\\s/]+)@", "$$1:[REDACTED]@")
+          - replace_pattern(body, "\\bs\\.[A-Za-z0-9]{24,}\\b", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_pattern(body, "\\bb\\.[A-Za-z0-9_-]{64,}", "[REDACTED_OPENBAO_TOKEN]")
+          - replace_pattern(body, "(?i)([a-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|private[_-]?key|credentials?|dsn|database[_-]?url|connection[_-]?string|signing[_-]?key|access[_-]?key|client[_-]?secret))\\s*[=:]\\s*[^\\s,&;]+", "$$1=[REDACTED]")
 
   batch:
     timeout: 2s
