@@ -518,9 +518,159 @@ def validate_docs_and_source_safety() -> None:
             fail("Collector source contains an inline credential field")
 
 
+AGENT = CODESTRA / "collector-agent.yaml"
+SECRET_REFERENCES = CODESTRA / "secret-references.v1.json"
+SECRET_SCHEMA = CODESTRA / "contracts" / "secret-reference.v1.schema.json"
+SECRET_SCHEMA_PIN = CODESTRA / "contracts" / "secret-reference.v1.schema.sha256"
+FORBIDDEN_REFERENCE_KEYS = {
+    "value", "password", "token", "private_key", "client_secret", "secret",
+    "secret_value", "unseal_key", "recovery_key", "root_token",
+}
+NEVER_EXPORTED_ATTRIBUTES = (
+    "authorization", "cookie", "password", "api[_-]?key", "client_secret",
+    "access_token", "private_key", "database_url", "x-vault-token", "x-openbao-token", "jwt",
+)
+
+
+def validate_correlation_preservation(config: dict[str, Any]) -> None:
+    """Spans and logs keep a bounded correlation.id; metrics never carry it."""
+    processors = config.get("processors", {})
+    redact = json.dumps(processors.get("attributes/redact", {}))
+    if "correlation" in redact:
+        fail("attributes/redact must not delete correlation from spans and logs")
+    for name in ("transform/traces", "transform/logs"):
+        if "correlation" in json.dumps(processors.get(name, {})):
+            fail(f"{name} must not delete the correlation identifier")
+    correlation = processors.get("transform/correlation")
+    if not isinstance(correlation, dict):
+        fail("transform/correlation processor is required")
+    rendered = json.dumps(correlation)
+    if "correlation.id" not in rendered or "Substring" not in rendered or ", 0, 128)" not in rendered:
+        fail("transform/correlation must normalise correlation.id and bound it to 128 characters")
+    metrics = json.dumps(processors.get("transform/metrics", {}))
+    if "delete_key(attributes, " not in metrics or "correlation_id" not in metrics:
+        fail("transform/metrics must keep deleting correlation_id from metric labels")
+    pipelines = config.get("service", {}).get("pipelines", {})
+    for signal in ("traces", "logs"):
+        if "transform/correlation" not in pipelines.get(signal, {}).get("processors", []):
+            fail(f"{signal} pipeline must run transform/correlation")
+    if "transform/correlation" in pipelines.get("metrics", {}).get("processors", []):
+        fail("metrics pipeline must not carry correlation")
+    resource = json.dumps(processors.get("resource/codestra", {}))
+    if "correlation" not in resource:
+        fail("resource/codestra must still strip correlation from resource attributes")
+
+
+def validate_agent_profile() -> None:
+    """The per-host agent binds loopback only, redacts, and forwards solely to the gateway."""
+    config = load_yaml(AGENT)
+    receivers = config.get("receivers", {})
+    protocols = receivers.get("otlp", {}).get("protocols", {})
+    for protocol, port in (("grpc", 4317), ("http", 4318)):
+        endpoint = str(protocols.get(protocol, {}).get("endpoint", ""))
+        if endpoint != f"127.0.0.1:{port}":
+            fail(f"agent OTLP/{protocol} must bind 127.0.0.1:{port} only")
+    if set(receivers) != {"otlp"}:
+        fail("agent may expose only the OTLP receiver")
+    exporters = config.get("exporters", {})
+    if set(exporters) != {"otlp/gateway"}:
+        fail("agent must export only to the central gateway")
+    gateway = exporters["otlp/gateway"]
+    if gateway.get("endpoint") != "${env:OTEL_GATEWAY_OTLP_GRPC_ENDPOINT}":
+        fail("agent gateway endpoint must come from deployment configuration")
+    tls = gateway.get("tls", {})
+    if tls.get("insecure") is not False or not all(str(tls.get(key, "")).startswith("/run/secrets/") for key in ("ca_file", "cert_file", "key_file")):
+        fail("agent must present mutual-TLS material from /run/secrets to the gateway")
+    if gateway.get("sending_queue", {}).get("storage") != "file_storage":
+        fail("agent must buffer through the bounded file-backed queue")
+    processors = config.get("processors", {})
+    redact = json.dumps(processors.get("attributes/redact", {}))
+    for token in NEVER_EXPORTED_ATTRIBUTES:
+        if token not in redact:
+            fail(f"agent redaction omits {token}")
+    shaped = json.dumps(processors.get("transform/secret_shaped", {}))
+    for marker in ("Bearer", "(hvs|hvb)", "eyJ", "PRIVATE KEY"):
+        if marker not in shaped:
+            fail(f"agent must redact secret-shaped values: {marker}")
+    pipelines = config.get("service", {}).get("pipelines", {})
+    if set(pipelines) != {"traces", "metrics", "logs"}:
+        fail("agent must define traces, metrics and logs pipelines")
+    for signal, pipeline in pipelines.items():
+        if pipeline.get("receivers") != ["otlp"] or pipeline.get("exporters") != ["otlp/gateway"]:
+            fail(f"agent {signal} pipeline must go OTLP -> gateway only")
+        if "attributes/redact" not in pipeline.get("processors", []) or "memory_limiter" not in pipeline.get("processors", []):
+            fail(f"agent {signal} pipeline must redact and bound memory")
+        if signal in {"traces", "logs"} and "transform/secret_shaped" not in pipeline.get("processors", []):
+            fail(f"agent {signal} pipeline must scrub secret-shaped values")
+    telemetry_host = str(config.get("service", {}).get("telemetry", {}).get("metrics", {}).get("readers", [{}])[0].get("pull", {}).get("exporter", {}).get("prometheus", {}).get("host", ""))
+    if telemetry_host != "127.0.0.1":
+        fail("agent self-metrics must bind loopback")
+    text = require_file(AGENT)
+    if "insecure_skip_verify: true" in text or "insecure: true" in text:
+        fail("agent must never disable TLS verification")
+
+
+def reject_secret_material(value: Any, trail: str) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if str(key).lower() in FORBIDDEN_REFERENCE_KEYS or str(key).lower().endswith(("_password", "_token", "_secret")):
+                fail(f"secret reference carries a value-bearing key at {trail}.{key}")
+            reject_secret_material(item, f"{trail}.{key}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            reject_secret_material(item, f"{trail}[{index}]")
+    elif isinstance(value, str) and (value.startswith("hvs.") or "PRIVATE KEY" in value):
+        fail(f"secret-shaped value at {trail}")
+
+
+def validate_secret_references() -> None:
+    """Every /run/secrets file the collectors read is the rendering of an OpenBao reference."""
+    import hashlib
+
+    schema = load_json(SECRET_SCHEMA)
+    pin = SECRET_SCHEMA_PIN.read_text(encoding="utf-8").strip()
+    if hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest() != pin:
+        fail("vendored secret-reference schema does not match its pin")
+    document = load_json(SECRET_REFERENCES)
+    if document.get("secretValuesIncluded") is not False or document.get("schemaSha256") != pin:
+        fail("secret references must declare no values and bind the pinned schema")
+    if document.get("authority", {}).get("workloadIdentity") != "otel-gateway":
+        fail("the collector reads OpenBao only as the otel-gateway identity")
+    reject_secret_material(document, "secret-references")
+    references = document.get("references", [])
+    covered: set[str] = set()
+    environments: set[str] = set()
+    for index, reference in enumerate(references):
+        trail = f"references[{index}]"
+        for required in schema["required"]:
+            if required not in reference:
+                fail(f"{trail} missing {required}")
+        env = reference["environment"]
+        ref = reference["secret_ref"]
+        if reference["provider"] != "openbao" or reference["workload_identity"] != "otel-gateway":
+            fail(f"{trail} must be an openbao reference readable by otel-gateway")
+        if not ref.startswith(f"codestra/{env}/observability/otel-gateway/"):
+            fail(f"{trail} must lie beneath the otel-gateway prefix for {env}")
+        if reference.get("reference_uri") != "openbao://" + ref:
+            fail(f"{trail} reference_uri must equal openbao:// + secret_ref")
+        if reference["secret_class"] not in schema["properties"]["secret_class"]["enum"]:
+            fail(f"{trail} has an unknown secret_class")
+        environments.add(env)
+        covered.update(reference.get("runtime_files", []))
+    if environments != {"staging", "production"}:
+        fail("secret references must cover exactly staging and production")
+    gateway_text = require_file(COLLECTOR)
+    for path in sorted(set(re.findall(r"/run/secrets/otelcol_[a-z_]+", gateway_text))):
+        if path not in covered:
+            fail(f"gateway secret file has no OpenBao reference: {path}")
+
+
 def main() -> None:
     validate_profile()
     validate_collector()
+    validate_correlation_preservation(load_yaml(COLLECTOR))
+    validate_agent_profile()
+    validate_secret_references()
     validate_runtime()
     validate_docs_and_source_safety()
     print("Codestra OpenTelemetry corporate configuration validation PASS")
