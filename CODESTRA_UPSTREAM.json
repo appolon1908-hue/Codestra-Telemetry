@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "component": "opentelemetry-collector",
-  "codestra_repository": "appolon1908-hue/Codestra-Telemetry",
+  "codestra_repository": "ingtrader21-spec/Codestra-Telemetry",
   "upstream_repository": "open-telemetry/opentelemetry-collector",
   "upstream_clone_url": "https://github.com/open-telemetry/opentelemetry-collector.git",
   "upstream_ref": "main",

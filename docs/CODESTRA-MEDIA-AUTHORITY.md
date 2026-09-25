@@ -1,6 +1,6 @@
 # Codestra OpenTelemetry Authority
 
-Principal repository: `appolon1908-hue/Codestra-Telemetry`
+Principal repository: `ingtrader21-spec/Codestra-Telemetry`
 Canonical service host: `otel.codestra.media`
 Canonical DNS target: `37.27.128.39`
 
