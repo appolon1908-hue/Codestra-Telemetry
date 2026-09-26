@@ -1,0 +1,12 @@
+version: 1
+repository: Codestra-Telemetry
+repository_url: https://github.com/ingtrader21-spec/Codestra-Telemetry.git
+canonical_path: /home/codestra/Worktrees/Monitoring-Active-20260926/Codestra-Telemetry
+active_worktree: /home/codestra/Worktrees/Monitoring-Active-20260926/Codestra-Telemetry
+active_branch: governance/single-active-lane-20260926
+base_branch: main
+base_sha: 8527c047fe019ef3339dc5d1b267add7d8bf543b
+upstream_ref: origin/main
+publication_branch: governance/single-active-lane-20260926
+production_effects_allowed: false
+certification_mode: isolated_exact_sha
